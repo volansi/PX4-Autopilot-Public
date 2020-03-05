@@ -61,8 +61,8 @@
 static constexpr uint32_t spi1selects_gpio[] = PX4_SENSOR_BUS_CS_GPIO;
 static constexpr uint32_t spi2selects_gpio[] = PX4_MEMORY_BUS_CS_GPIO;
 static constexpr uint32_t spi4selects_gpio[] = PX4_BARO_BUS_CS_GPIO;
-static constexpr uint32_t spi5selects_gpio[] = PX4_EXTERNAL1_BUS_CS_GPIO;
-static constexpr uint32_t spi6selects_gpio[] = PX4_EXTERNAL2_BUS_CS_GPIO;
+// static constexpr uint32_t spi5selects_gpio[] = PX4_EXTERNAL1_BUS_CS_GPIO;
+// static constexpr uint32_t spi6selects_gpio[] = PX4_EXTERNAL2_BUS_CS_GPIO;
 
 /************************************************************************************
  * Name: stm32_spiinitialize
