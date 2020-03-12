@@ -18,41 +18,41 @@ px4_add_board(
 		TEL4:/dev/ttyS3
 	DRIVERS
 		adc
-		barometer # all available barometer drivers
-		batt_smbus
-		camera_capture
-		camera_trigger
+		# barometer # all available barometer drivers
+# 		batt_smbus
+# 		camera_capture
+# 		camera_trigger
 		differential_pressure # all available differential pressure drivers
-		distance_sensor # all available distance sensor drivers
-		dshot
+# 		distance_sensor # all available distance sensor drivers
+# 		#dshot
 		gps
-		heater
-		#imu # all available imu drivers
-		imu/adis16448
-		imu/adis16477
-		imu/adis16497
-		imu/bmi088
-		imu/mpu6000
-		imu/mpu9250
-		irlock
-		lights/blinkm
-		lights/rgbled
-		lights/rgbled_ncp5623c
+# 		heater
+# 		#imu # all available imu drivers
+# 		#imu/adis16448
+# 		#imu/adis16477
+# 		#imu/adis16497
+#		imu/bmi088
+#		imu/mpu6000
+#		imu/mpu9250
+# 		irlock
+# 		#lights/blinkm
+# 		#lights/rgbled
+# 		#lights/rgbled_ncp5623c
 		magnetometer # all available magnetometer drivers
 		mkblctrl
-		optical_flow # all available optical flow drivers
-		#osd
-		pca9685
-		power_monitor/ina226
-		#protocol_splitter
-#		pwm_input  - Need to create arch/stm32 arch/stm32h7 arch/kinetis and reloacate
-#					   all arch dependant code there
-		pwm_out_sim
+# 		#optical_flow # all available optical flow drivers
+# 		#osd
+# 		#pca9685
+# 		#power_monitor/ina226
+# 		#protocol_splitter
+# #		pwm_input  - Need to create arch/stm32 arch/stm32h7 arch/kinetis and reloacate
+# #					   all arch dependant code there
+# 		pwm_out_sim
 		px4fmu
 		px4io
-		roboclaw
-		tap_esc
-		telemetry # all available telemetry drivers
+		#roboclaw
+		#tap_esc
+		# telemetry # all available telemetry drivers
 		test_ppm
 		tone_alarm
 #		uavcan - No H7 or FD can support in UAVCAN yet
@@ -60,7 +60,7 @@ px4_add_board(
 		airspeed_selector
 		attitude_estimator_q
 		battery_status
-		camera_feedback
+		# camera_feedback
 		commander
 		dataman
 		ekf2
@@ -80,19 +80,19 @@ px4_add_board(
 		rc_update
 		rover_pos_control
 		sensors
-		sih
-		temperature_compensation
-		vmount
+		# sih
+		# temperature_compensation
+		# vmount
 		vtol_att_control
 	SYSTEMCMDS
 		bl_update
 		config
 		dmesg
 		dumpfile
-		esc_calib
+		# esc_calib
 		hardfault_log
 		i2cdetect
-		led_control
+		# led_control
 		mixer
 		motor_ramp
 		motor_test
@@ -105,21 +105,11 @@ px4_add_board(
 		reflect
 		sd_bench
 		shutdown
-		tests # tests and test runner
+#		tests # tests and test runner
 		top
 		topic_listener
 		tune_control
 		usb_connected
 		ver
 		work_queue
-	EXAMPLES
-		bottle_drop # OBC challenge
-		fixedwing_control # Tutorial code from https://px4.io/dev/example_fixedwing_control
-		hello
-		hwtest # Hardware test
-		#matlab_csv_serial
-		px4_mavlink_debug # Tutorial code from http://dev.px4.io/en/debug/debug_values.html
-		px4_simple_app # Tutorial code from http://dev.px4.io/en/apps/hello_sky.html
-		rover_steering_control # Rover example app
-		uuv_example_app
 	)

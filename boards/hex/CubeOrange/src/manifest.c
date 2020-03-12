@@ -66,7 +66,7 @@ typedef struct {
 typedef px4_hw_mft_list_entry_t *px4_hw_mft_list_entry;
 #define px4_hw_mft_list_uninitialized (px4_hw_mft_list_entry) -1
 
-static const px4_hw_mft_item_t device_unsupported = {0, 0, 0};
+// static const px4_hw_mft_item_t device_unsupported = {0, 0, 0};
 
 // List of components on a specific board configuration
 // The index of those components is given by the enum (px4_hw_mft_item_id_t)
@@ -98,32 +98,10 @@ static px4_hw_mft_list_entry_t mft_lists[] = {
  *
  ************************************************************************************/
 
+/// HACK -- no HW version support on Cubes
 __EXPORT px4_hw_mft_item board_query_manifest(px4_hw_mft_item_id_t id)
 {
-	static px4_hw_mft_list_entry boards_manifest = px4_hw_mft_list_uninitialized;
-
-	if (boards_manifest == px4_hw_mft_list_uninitialized) {
-		uint32_t ver_rev = board_get_hw_version() << 8;
-		ver_rev |= board_get_hw_revision();
-
-		for (unsigned i = 0; i < arraySize(mft_lists); i++) {
-			if (mft_lists[i].hw_ver_rev == ver_rev) {
-				boards_manifest = &mft_lists[i];
-				break;
-			}
-		}
-
-		if (boards_manifest == px4_hw_mft_list_uninitialized) {
-			syslog(LOG_ERR, "[boot] Board %4x is not supported!\n", ver_rev);
-		}
-	}
-
-	px4_hw_mft_item rv = &device_unsupported;
-
-	if (boards_manifest != px4_hw_mft_list_uninitialized &&
-	    id < boards_manifest->entries) {
-		rv = &boards_manifest->mft[id];
-	}
-
+	static px4_hw_mft_list_entry boards_manifest = &mft_lists[0];
+	px4_hw_mft_item rv = &boards_manifest->mft[id];
 	return rv;
 }

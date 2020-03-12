@@ -92,6 +92,13 @@ extern void led_on(int led);
 extern void led_off(int led);
 __END_DECLS
 
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+#define HW_VER_TYPE_INIT {'V','6',0, 0}
+static int hw_version = 0x000900AF; /// Made-up number.  Cube is 0x0009000E
+static int hw_revision = 0;
+static char hw_type[4] = HW_VER_TYPE_INIT;
 
 /************************************************************************************
  * Name: board_peripheral_reset
@@ -102,13 +109,13 @@ __END_DECLS
 __EXPORT void board_peripheral_reset(int ms)
 {
 	/* set the peripheral rails off */
-
+	syslog(LOG_INFO, "in board_peripheral_reset");
 	VDD_5V_PERIPH_EN(false);
 	VDD_3V3_SENSORS_EN(false);
 
-	bool last = READ_VDD_3V3_SPEKTRUM_POWER_EN();
+	// bool last = READ_VDD_3V3_SPEKTRUM_POWER_EN();
 	/* Keep Spektum on to discharge rail*/
-	VDD_3V3_SPEKTRUM_POWER_EN(false);
+	// VDD_3V3_SPEKTRUM_POWER_EN(false);
 
 	/* wait for the peripheral rail to reach GND */
 	usleep(ms * 1000);
@@ -117,7 +124,7 @@ __EXPORT void board_peripheral_reset(int ms)
 	/* re-enable power */
 
 	/* switch the peripheral rail back on */
-	VDD_3V3_SPEKTRUM_POWER_EN(last);
+	// VDD_3V3_SPEKTRUM_POWER_EN(last);
 	VDD_3V3_SENSORS_EN(true);
 	VDD_5V_PERIPH_EN(true);
 
@@ -146,6 +153,57 @@ __EXPORT void board_on_reset(int status)
 	}
 }
 
+
+static int determin_hw_version(int *version, int *revision)
+{
+	*revision = 0; /* default revision */
+	*version = 0x000900AF; /// HACK
+	return OK;
+}
+
+/************************************************************************************
+ * Name: board_get_hw_type_name
+ *
+ * Description:
+ *   Optional returns a string defining the HW type
+ *
+ *
+ ************************************************************************************/
+
+__EXPORT const char *board_get_hw_type_name()
+{
+	return (const char *) hw_type;
+}
+
+/************************************************************************************
+ * Name: board_get_hw_version
+ *
+ * Description:
+ *   Optional returns a integer HW version
+ *
+ *
+ ************************************************************************************/
+
+__EXPORT int board_get_hw_version()
+{
+	return  HW_VER_SIMPLE(hw_version);
+}
+
+/************************************************************************************
+ * Name: board_get_hw_revision
+ *
+ * Description:
+ *   Optional returns a integer HW revision
+ *
+ *
+ ************************************************************************************/
+
+__EXPORT int board_get_hw_revision()
+{
+	return  hw_revision;
+}
+
+
 /************************************************************************************
  * Name: stm32_boardinitialize
  *
@@ -172,11 +230,11 @@ stm32_boardinitialize(void)
 
 	/* configure SPI interfaces */
 
-	stm32_spiinitialize();
+	// stm32_spiinitialize();
 
 	/* configure USB interfaces */
 
-	stm32_usbinitialize();
+	// stm32_usbinitialize();
 
 }
 
@@ -208,19 +266,20 @@ stm32_boardinitialize(void)
 
 __EXPORT int board_app_initialize(uintptr_t arg)
 {
+	syslog(LOG_INFO, "Made it to board_app_init");
 	/* Power on Interfaces */
-	VDD_3V3_SD_CARD_EN(true);
+	// VDD_3V3_SD_CARD_EN(true);
 	VDD_5V_PERIPH_EN(true);
-	VDD_5V_HIPOWER_EN(true);
+	// VDD_5V_HIPOWER_EN(true);
 	VDD_3V3_SENSORS_EN(true);
-	VDD_3V3_SPEKTRUM_POWER_EN(true);
+	// VDD_3V3_SPEKTRUM_POWER_EN(true);
 
 	/* Need hrt running before using the ADC */
 
 	px4_platform_init();
 
 
-	if (OK == board_determine_hw_info()) {
+	if (OK == determin_hw_version(&hw_version, &hw_revision)) {
 		syslog(LOG_INFO, "[boot] Rev 0x%1x : Ver 0x%1x %s\n", board_get_hw_revision(), board_get_hw_version(),
 		       board_get_hw_type_name());
 
@@ -257,8 +316,8 @@ __EXPORT int board_app_initialize(uintptr_t arg)
 	/* initial LED state */
 	drv_led_start();
 	led_off(LED_RED);
-	led_on(LED_GREEN); // Indicate Power.
-	led_off(LED_BLUE);
+	// led_on(LED_GREEN); // Indicate Power.
+	// led_off(LED_BLUE);
 
 	if (board_hardfault_init(2, true) != 0) {
 		led_on(LED_RED);

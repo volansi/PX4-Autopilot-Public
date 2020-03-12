@@ -34,7 +34,7 @@
  *
  ****************************************************************************/
 
-/* The Durandal-v1 uses an STM32H743II has 2048Kb of main FLASH memory.
+/* The Orange Cube uses an STM32H753VI has 2048Kb of main FLASH memory.
  * The flash memory is partitioned into a User Flash memory and a System
  * Flash memory. Each of these memories has two banks:
  *

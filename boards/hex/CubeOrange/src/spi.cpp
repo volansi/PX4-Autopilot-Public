@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2012 PX4 Development Team. All rights reserved.
+ *   Copyright (C) 2020 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,291 +31,120 @@
  *
  ****************************************************************************/
 
-/**
- * @file px4fmu_spi.c
+#include <px4_arch/spi_hw_description.h>
+#include <drivers/drv_sensor.h>
+#include <nuttx/spi/spi.h>
+
+/** ArduPilot CubeOrange SPI Device Table
+ *    PC1 MAG_CS CS
+ *    PC2 MPU_CS CS
+ *    PC13 GYRO_EXT_CS CS
+ *    PC14 BARO_EXT_CS CS
+ *    PC15 ACCEL_EXT_CS CS
+ *    PD7 BARO_CS CS
+ *    PE4 MPU_EXT_CS CS
+ *    PD10 FRAM_CS CS SPEED_VERYLOW
  *
- * Board-specific SPI functions.
+ *    SPIDEV ms5611         SPI1 DEVID3  BARO_CS      MODE3 20*MHZ 20*MHZ
+ *    SPIDEV ms5611_ext     SPI4 DEVID2  BARO_EXT_CS  MODE3 20*MHZ 20*MHZ
+ *    SPIDEV mpu6000        SPI1 DEVID4  MPU_CS       MODE3  2*MHZ  8*MHZ
+ *    SPIDEV icm20608-am    SPI1 DEVID2  ACCEL_EXT_CS MODE3  4*MHZ  8*MHZ
+ *    SPIDEV mpu9250        SPI1 DEVID4  MPU_CS       MODE3  4*MHZ  8*MHZ
+ *    SPIDEV mpu9250_ext    SPI4 DEVID1  MPU_EXT_CS   MODE3  4*MHZ  8*MHZ
+ *    SPIDEV icm20948       SPI1 DEVID4  MPU_CS       MODE3  4*MHZ  8*MHZ
+ *    SPIDEV icm20948_ext   SPI4 DEVID1  MPU_EXT_CS   MODE3  4*MHZ  8*MHZ
+ *    SPIDEV hmc5843        SPI1 DEVID5  MAG_CS       MODE3 11*MHZ 11*MHZ
+ *    SPIDEV lsm9ds0_g      SPI1 DEVID1  GYRO_EXT_CS  MODE3 11*MHZ 11*MHZ
+ *    SPIDEV lsm9ds0_am     SPI1 DEVID2  ACCEL_EXT_CS MODE3 11*MHZ 11*MHZ
+ *    SPIDEV lsm9ds0_ext_g  SPI4 DEVID4  GYRO_EXT_CS  MODE3 11*MHZ 11*MHZ
+ *    SPIDEV lsm9ds0_ext_am SPI4 DEVID3  ACCEL_EXT_CS MODE3 11*MHZ 11*MHZ
+ *    SPIDEV icm20602_ext   SPI4 DEVID4  GYRO_EXT_CS  MODE3  4*MHZ  8*MHZ
+ *    SPIDEV ramtron        SPI2 DEVID10 FRAM_CS      MODE3  8*MHZ  8*MHZ
+ *    SPIDEV external0m0    SPI4 DEVID5  MPU_EXT_CS   MODE0  2*MHZ  2*MHZ
+ *    SPIDEV external0m1    SPI4 DEVID5  MPU_EXT_CS   MODE1  2*MHZ  2*MHZ
+ *    SPIDEV external0m2    SPI4 DEVID5  MPU_EXT_CS   MODE2  2*MHZ  2*MHZ
+ *    SPIDEV external0m3    SPI4 DEVID5  MPU_EXT_CS   MODE3  2*MHZ  2*MHZ
+ *    SPIDEV pixartPC15     SPI4 DEVID13 ACCEL_EXT_CS MODE3  2*MHZ  2*MHZ
+ *
+ *    # three IMUs, but allow for different varients. First two IMUs are
+ *    # isolated, 3rd isn't
+ *    IMU Invensense SPI:mpu9250_ext ROTATION_PITCH_180
+ *
+ *    # the 3 rotations for the LSM9DS0 driver are for the accel, the gyro
+ *    # and the H varient of the gyro
+ *    IMU LSM9DS0 SPI:lsm9ds0_ext_g SPI:lsm9ds0_ext_am ROTATION_ROLL_180_YAW_270 ROTATION_ROLL_180_YAW_90 ROTATION_ROLL_180_YAW_90
+ *
+ *    # 3rd non-isolated IMU
+ *    IMU Invensense SPI:mpu9250 ROTATION_YAW_270
+ *
+ *    # alternative IMU set for newer cubes
+ *    IMU Invensense SPI:icm20602_ext ROTATION_ROLL_180_YAW_270
+ *    IMU Invensensev2 SPI:icm20948_ext ROTATION_PITCH_180
+ *    IMU Invensensev2 SPI:icm20948 ROTATION_YAW_270
+ *
+ *    define HAL_DEFAULT_INS_FAST_SAMPLE 7
+ *
+ *    # two baros
+ *    BARO MS56XX SPI:ms5611_ext
+ *    BARO MS56XX SPI:ms5611
+ *
+ *    # two compasses. First is in the LSM303D
+ *    COMPASS LSM303D SPI:lsm9ds0_ext_am ROTATION_YAW_270
+ *    # 2nd compass is part of the 2nd invensense IMU
+ *    COMPASS AK8963:probe_mpu9250 1 ROTATION_YAW_270
+ *
+ *    # compass as part of ICM20948 on newer cubes
+ *    COMPASS AK09916:probe_ICM20948 0 ROTATION_ROLL_180_YAW_90
+ *
+ *  Final SPI Table:
+ *
+ *  BUS     TYPE       DEVICE     CS     ROTATION
+ *  ----    ----       -------    ---    -----------------
+ *  SPI1    IMU        MPU9250    E4     PITCH-180
+ *  SPI4    GYRO       LSM9DS0    C13    ROLL-180-YAW-270
+ *  SPI4    ACC        LSM9DS0    C15    ROLL-180-YAW-90
+ *  SPI4    IMU/MAG    MPU9250    C2     YAW-270
+ *  SPI4    IMU        ICM20602   C13    ROLL-180-YAW-270
+ *  SPI4    IMU        ICM20948   E4     PITCH-180
+ *  SPI1    IMU/MAG    ICM20948   C2     YAW-270 (IMU) / ROLL-180-YAW-90 (MAG)
+ *  SPI4    BARO       MS5611     C14
+ *  SPI1    BARO       MS5611     D7
+ *  SPI4    MAG        LSM303D    C15    YAW-270 (MAG)
  */
 
-/************************************************************************************
- * Included Files
- ************************************************************************************/
 
-#include <board_config.h>
+constexpr px4_spi_bus_t px4_spi_buses[SPI_BUS_MAX_BUS_ITEMS] = {
+	initSPIBus(SPI::Bus::SPI1, {
+		initSPIDevice(DRV_IMU_DEVTYPE_MPU9250, SPI::CS{GPIO::PortE, GPIO::Pin4}, SPI::DRDY{GPIO::PortD, GPIO::Pin15}),
+		initSPIDevice(DRV_IMU_DEVTYPE_ICM20948, SPI::CS{GPIO::PortC, GPIO::Pin2}, SPI::DRDY{GPIO::PortD, GPIO::Pin15}),
+		initSPIDevice(DRV_BARO_DEVTYPE_MS5611, SPI::CS{GPIO::PortD, GPIO::Pin7}, SPI::DRDY{GPIO::PortB, GPIO::Pin0}),
+	}, {GPIO::PortE, GPIO::Pin3}
+		  ),
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <debug.h>
-#include <unistd.h>
+	initSPIBus(SPI::Bus::SPI2, {
+		initSPIDevice(SPIDEV_FLASH(0), SPI::CS{GPIO::PortD, GPIO::Pin10})
+	}),
 
-#include <nuttx/spi/spi.h>
-#include <arch/board/board.h>
-#include <systemlib/px4_macros.h>
+	initSPIBus(SPI::Bus::SPI4, {
+		initSPIDevice(DRV_IMU_DEVTYPE_ST_LSM9DS1_AG, SPI::CS{GPIO::PortC, GPIO::Pin13}),
+		initSPIDevice(DRV_MAG_DEVTYPE_ST_LSM9DS1_M, SPI::CS{GPIO::PortC, GPIO::Pin15}),
+		initSPIDevice(DRV_IMU_DEVTYPE_MPU9250, SPI::CS{GPIO::PortC, GPIO::Pin2}),
+		initSPIDevice(DRV_IMU_DEVTYPE_ICM20602, SPI::CS{GPIO::PortC, GPIO::Pin13}),
+		initSPIDevice(DRV_BARO_DEVTYPE_MS5611, SPI::CS{GPIO::PortC, GPIO::Pin14}),
+	}),
+};
 
-#include <up_arch.h>
-#include <chip.h>
-#include <stm32_gpio.h>
-#include "board_config.h"
+/* TODO: Figure out which of these are actually relevant (or see fmu-v3 for version-based config)
+	initSPIBus(SPI::Bus::SPI4, {
+		initSPIDevice(DRV_IMU_DEVTYPE_ST_LSM9DS1_AG, SPI::CS{GPIO::PortC, GPIO::Pin13}),
+		initSPIDevice(DRV_MAG_DEVTYPE_ST_LSM9DS1_M, SPI::CS{GPIO::PortC, GPIO::Pin15}),
+		initSPIDevice(DRV_IMU_DEVTYPE_MPU9250, SPI::CS{GPIO::PortC, GPIO::Pin2}),
+		initSPIDevice(DRV_IMU_DEVTYPE_ICM20602, SPI::CS{GPIO::PortC, GPIO::Pin13}),
+		initSPIDevice(DRV_IMU_DEVTYPE_ICM20948, SPI::CS{GPIO::PortE, GPIO::Pin4}),
+		initSPIDevice(DRV_BARO_DEVTYPE_MS5611, SPI::CS{GPIO::PortC, GPIO::Pin14}),
+	}),
+*/
 
-/* Define CS GPIO array */
-static constexpr uint32_t spi1selects_gpio[] = PX4_SENSOR_BUS_CS_GPIO;
-static constexpr uint32_t spi2selects_gpio[] = PX4_MEMORY_BUS_CS_GPIO;
-static constexpr uint32_t spi4selects_gpio[] = PX4_BARO_BUS_CS_GPIO;
-// static constexpr uint32_t spi5selects_gpio[] = PX4_EXTERNAL1_BUS_CS_GPIO;
-// static constexpr uint32_t spi6selects_gpio[] = PX4_EXTERNAL2_BUS_CS_GPIO;
+// initSPIDevice(DRV_IMU_DEVTYPE_MPU9250, SPI::CS{GPIO::PortC, GPIO::Pin2}, SPI::DRDY{GPIO::PortD, GPIO::Pin15}),
 
-/************************************************************************************
- * Name: stm32_spiinitialize
- *
- * Description:
- *   Called to configure SPI chip select GPIO pins for the PX4FMU board.
- *
- ************************************************************************************/
-
-__EXPORT void stm32_spiinitialize()
-{
-#ifdef CONFIG_STM32H7_SPI1
-
-	for (auto gpio : spi1selects_gpio) {
-		px4_arch_configgpio(gpio);
-	}
-
-#endif // CONFIG_STM32H7_SPI1
-
-
-#if defined(CONFIG_STM32H7_SPI2)
-
-	for (auto gpio : spi2selects_gpio) {
-		px4_arch_configgpio(gpio);
-	}
-
-#endif // CONFIG_STM32H7_SPI2
-
-
-#ifdef CONFIG_STM32H7_SPI4
-
-	for (auto gpio : spi4selects_gpio) {
-		px4_arch_configgpio(gpio);
-	}
-
-#endif // CONFIG_STM32H7_SPI4
-
-
-#ifdef CONFIG_STM32H7_SPI5
-
-	for (auto gpio : spi5selects_gpio) {
-		px4_arch_configgpio(gpio);
-	}
-
-#endif // CONFIG_STM32H7_SPI5
-
-
-#ifdef CONFIG_STM32H7_SPI6
-
-	for (auto gpio : spi6selects_gpio) {
-		px4_arch_configgpio(gpio);
-	}
-
-#endif // CONFIG_STM32H7_SPI6
-}
-
-/************************************************************************************
- * Name: stm32_spi1select and stm32_spi1status
- *
- * Description:
- *   Called by stm32 spi driver on bus 1.
- *
- ************************************************************************************/
-#ifdef CONFIG_STM32H7_SPI1
-__EXPORT void stm32_spi1select(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
-{
-	ASSERT(PX4_SPI_BUS_ID(devid) == PX4_SPI_BUS_SENSORS);
-
-	// Making sure the other peripherals are not selected
-	for (auto cs : spi1selects_gpio) {
-		stm32_gpiowrite(cs, 1);
-	}
-
-	// SPI select is active low, so write !selected to select the device
-	stm32_gpiowrite(spi1selects_gpio[PX4_SPI_DEV_ID(devid)], !selected);
-}
-
-__EXPORT uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
-{
-	return SPI_STATUS_PRESENT;
-}
-#endif // CONFIG_STM32H7_SPI1
-
-/************************************************************************************
- * Name: stm32_spi2select and stm32_spi2status
- *
- * Description:
- *   Called by stm32 spi driver on bus 2.
- *
- ************************************************************************************/
-#if defined(CONFIG_STM32H7_SPI2)
-__EXPORT void stm32_spi2select(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
-{
-	if (devid == SPIDEV_FLASH(0)) {
-		devid = PX4_SPIDEV_MEMORY;
-	}
-
-	ASSERT(PX4_SPI_BUS_ID(devid) == PX4_SPI_BUS_MEMORY);
-
-	// Making sure the other peripherals are not selected
-	for (auto cs : spi2selects_gpio) {
-		stm32_gpiowrite(cs, 1);
-	}
-
-	// SPI select is active low, so write !selected to select the device
-	stm32_gpiowrite(spi2selects_gpio[PX4_SPI_DEV_ID(devid)], !selected);
-}
-
-__EXPORT uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
-{
-	return SPI_STATUS_PRESENT;
-}
-#endif // CONFIG_STM32H7_SPI2 && GPIO_SPI2_CS_FRAM
-
-/************************************************************************************
- * Name: stm32_spi4select and stm32_spi4status
- *
- * Description:
- *   Called by stm32 spi driver on bus 4.
- *
- ************************************************************************************/
-#ifdef CONFIG_STM32H7_SPI4
-__EXPORT void stm32_spi4select(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
-{
-	ASSERT(PX4_SPI_BUS_ID(devid) == PX4_SPI_BUS_BARO);
-
-	// Making sure the other peripherals are not selected
-	for (auto cs : spi4selects_gpio) {
-		stm32_gpiowrite(cs, 1);
-	}
-
-	// SPI select is active low, so write !selected to select the device
-	stm32_gpiowrite(spi4selects_gpio[PX4_SPI_DEV_ID(devid)], !selected);
-}
-
-__EXPORT uint8_t stm32_spi4status(FAR struct spi_dev_s *dev, uint32_t devid)
-{
-	return SPI_STATUS_PRESENT;
-}
-#endif // CONFIG_STM32H7_SPI4
-
-/************************************************************************************
- * Name: stm32_spi5select and stm32_spi5status
- *
- * Description:
- *   Called by stm32 spi driver on bus 5.
- *
- ************************************************************************************/
-#ifdef CONFIG_STM32H7_SPI5
-__EXPORT void stm32_spi5select(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
-{
-	ASSERT(PX4_SPI_BUS_ID(devid) == PX4_SPI_BUS_EXTERNAL1);
-
-	// Making sure the other peripherals are not selected
-	for (auto cs : spi5selects_gpio) {
-		stm32_gpiowrite(cs, 1);
-	}
-
-	// SPI select is active low, so write !selected to select the device
-	stm32_gpiowrite(spi5selects_gpio[PX4_SPI_DEV_ID(devid)], !selected);
-}
-
-__EXPORT uint8_t stm32_spi5status(FAR struct spi_dev_s *dev, uint32_t devid)
-{
-	return SPI_STATUS_PRESENT;
-}
-#endif // CONFIG_STM32H7_SPI5
-
-/************************************************************************************
- * Name: stm32_spi6select and stm32_spi6status
- *
- * Description:
- *   Called by stm32 spi driver on bus 6.
- *
- ************************************************************************************/
-#ifdef CONFIG_STM32H7_SPI6
-__EXPORT void stm32_spi6select(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
-{
-	ASSERT(PX4_SPI_BUS_ID(devid) == PX4_SPI_BUS_EXTERNAL2);
-
-	// Making sure the other peripherals are not selected
-	for (auto cs : spi6selects_gpio) {
-		stm32_gpiowrite(cs, 1);
-	}
-
-	// SPI select is active low, so write !selected to select the device
-	stm32_gpiowrite(spi6selects_gpio[PX4_SPI_DEV_ID(devid)], !selected);
-}
-
-__EXPORT uint8_t stm32_spi6status(FAR struct spi_dev_s *dev, uint32_t devid)
-{
-	return SPI_STATUS_PRESENT;
-}
-#endif // CONFIG_STM32H7_SPI6
-
-/************************************************************************************
- * Name: board_spi_reset
- *
- * Description:
- *
- *
- ************************************************************************************/
-
-__EXPORT void board_spi_reset(int ms)
-{
-	// disable SPI bus
-	for (auto cs : spi1selects_gpio) {
-		stm32_configgpio(_PIN_OFF(cs));
-	}
-
-	stm32_configgpio(GPIO_SPI1_SCK_OFF);
-	stm32_configgpio(GPIO_SPI1_MISO_OFF);
-	stm32_configgpio(GPIO_SPI1_MOSI_OFF);
-
-
-#if BOARD_USE_DRDY
-	stm32_configgpio(GPIO_DRDY_OFF_SPI1_DRDY1_ICM20689);
-	stm32_configgpio(GPIO_DRDY_OFF_SPI1_DRDY2_BMI088_GYRO);
-	stm32_configgpio(GPIO_DRDY_OFF_SPI1_DRDY3_BMI088_ACC);
-	stm32_configgpio(GPIO_DRDY_OFF_SPI1_DRDY4_ICM20602);
-	stm32_configgpio(GPIO_DRDY_OFF_SPI1_DRDY5_BMI088_GYRO);
-	stm32_configgpio(GPIO_DRDY_OFF_SPI1_DRDY6_BMI088_ACC);
-#endif
-	/* set the sensor rail off */
-	stm32_gpiowrite(GPIO_VDD_3V3_SENSORS_EN, 0);
-
-	/* wait for the sensor rail to reach GND */
-	usleep(ms * 1000);
-	syslog(LOG_DEBUG, "reset done, %d ms\n", ms);
-
-	/* re-enable power */
-
-	/* switch the sensor rail back on */
-	stm32_gpiowrite(GPIO_VDD_3V3_SENSORS_EN, 1);
-
-	/* wait a bit before starting SPI, different times didn't influence results */
-	usleep(100);
-
-	/* reconfigure the SPI pins */
-	for (auto cs : spi1selects_gpio) {
-		stm32_configgpio(cs);
-	}
-
-	stm32_configgpio(GPIO_SPI1_SCK);
-	stm32_configgpio(GPIO_SPI1_MISO);
-	stm32_configgpio(GPIO_SPI1_MOSI);
-
-#if BOARD_USE_DRDY
-	stm32_configgpio(GPIO_SPI1_DRDY1_ICM20689);
-	stm32_configgpio(GPIO_SPI1_DRDY2_BMI055_GYRO);
-	stm32_configgpio(GPIO_SPI1_DRDY3_BMI055_ACC);
-	stm32_configgpio(GPIO_SPI1_DRDY4_ICM20602);
-	stm32_configgpio(GPIO_SPI1_DRDY5_BMI055_GYRO);
-	stm32_configgpio(GPIO_SPI1_DRDY6_BMI055_ACC);
-#endif
-}
+static constexpr bool unused = validateSPIConfig(px4_spi_buses);
