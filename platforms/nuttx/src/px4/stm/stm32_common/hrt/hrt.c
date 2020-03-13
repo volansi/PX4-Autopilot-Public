@@ -74,6 +74,13 @@
 
 #ifdef HRT_TIMER
 
+#ifndef STM32_RCC_APB1ENR
+// STM32H7 uses slightly different define
+# define STM32_RCC_APB1ENR  STM32_RCC_APB1LENR
+# define RCC_APB1ENR_TIM2EN  RCC_APB1LENR_TIM2EN
+# define RCC_APB1ENR_TIM5EN  RCC_APB1LENR_TIM5EN
+#endif
+
 /* HRT configuration */
 #if   HRT_TIMER == 1
 # define HRT_TIMER_BASE		STM32_TIM1_BASE

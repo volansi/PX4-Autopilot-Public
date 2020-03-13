@@ -48,6 +48,13 @@
 #define TONE_ALARM_COUNTER_PERIOD 65536
 #endif
 
+#ifndef STM32_RCC_APB1ENR
+// STM32H7 uses slightly different define
+# define STM32_RCC_APB1ENR  STM32_RCC_APB1LENR
+# define RCC_APB1ENR_TIM2EN  RCC_APB1LENR_TIM2EN
+# define RCC_APB1ENR_TIM5EN  RCC_APB1LENR_TIM5EN
+#endif
+
 /* Tone alarm configuration */
 #if   TONE_ALARM_TIMER == 1
 # define TONE_ALARM_BASE                STM32_TIM1_BASE
