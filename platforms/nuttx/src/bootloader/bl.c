@@ -42,7 +42,9 @@
 
 #include <inttypes.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "bl.h"
 #include "cdcacm.h"
@@ -537,6 +539,8 @@ bootloader(unsigned timeout)
 	volatile uint32_t  bl_state = 0; // Must see correct command sequence to erase and reboot (commit first word)
 	uint32_t  address = board_info.fw_size; /* force erase before upload will work */
 	uint32_t  first_word = 0xffffffff;
+	char msg[32];
+	// uint32_t read_word;
 
 	/* (re)start the timer system */
 	arch_systic_init();
@@ -693,7 +697,8 @@ bootloader(unsigned timeout)
 
 			address = 0;
 			SET_BL_STATE(STATE_PROTO_CHIP_ERASE);
-
+			strcpy(msg, "flash erase success\r\n");
+			uart_cout((uint8_t *)msg, strlen(msg));
 			// resume blinking
 			led_set(LED_BLINK);
 			break;
@@ -705,75 +710,92 @@ bootloader(unsigned timeout)
 		// invalid reply: INSYNC/INVALID
 		// readback failure:  INSYNC/FAILURE
 		//
-		case PROTO_PROG_MULTI:    // program bytes
-			// expect count
-			arg = cin_wait(50);
+		case PROTO_PROG_MULTI: {    // program bytes
+				// expect count
+				arg = cin_wait(50);
 
-			if (arg < 0) {
-				goto cmd_bad;
-			}
-
-			// sanity-check arguments
-			if (arg % 4) {
-				goto cmd_bad;
-			}
-
-			if ((address + arg) > board_info.fw_size) {
-				goto cmd_bad;
-			}
-
-			if ((unsigned int)arg > sizeof(flash_buffer.c)) {
-				goto cmd_bad;
-			}
-
-			for (int i = 0; i < arg; i++) {
-				c = cin_wait(1000);
-
-				if (c < 0) {
+				if (arg < 0) {
 					goto cmd_bad;
 				}
 
-				flash_buffer.c[i] = c;
-			}
+				// sanity-check arguments
+				if (arg % 4) {
+					goto cmd_bad;
+				}
 
-			if (!wait_for_eoc(200)) {
-				goto cmd_bad;
-			}
+				if ((address + arg) > board_info.fw_size) {
+					goto cmd_bad;
+				}
 
-			if (address == 0) {
+				if ((unsigned int)arg > sizeof(flash_buffer.c)) {
+					goto cmd_bad;
+				}
+
+				for (int i = 0; i < arg; i++) {
+					c = cin_wait(1000);
+
+					if (c < 0) {
+						goto cmd_bad;
+					}
+
+					flash_buffer.c[i] = c;
+				}
+
+				if (!wait_for_eoc(200)) {
+					goto cmd_bad;
+				}
+
+				if (address == 0) {
 
 #if defined(TARGET_HW_PX4_FMU_V4)
 
-				if (check_silicon()) {
-					goto bad_silicon;
-				}
+					if (check_silicon()) {
+						goto bad_silicon;
+					}
 
 #endif
 
-				// save the first word and don't program it until everything else is done
-				first_word = flash_buffer.w[0];
-				// replace first word with bits we can overwrite later
-				flash_buffer.w[0] = 0xffffffff;
-			}
-
-			arg /= 4;
-
-			for (int i = 0; i < arg; i++) {
-
-				// program the word
-				flash_func_write_word(address, flash_buffer.w[i]);
-
-				// do immediate read-back verify
-				if (flash_func_read_word(address) != flash_buffer.w[i]) {
-					goto cmd_fail;
+					// save the first word and don't program it until everything else is done
+					first_word = flash_buffer.w[0];
+					// replace first word with bits we can overwrite later
+					flash_buffer.w[0] = 0xffffffff;
 				}
 
-				address += 4;
+				arg /= 4;
+
+				// address += 16*4;
+				for (int i = 0; i < arg; i++) {
+					// sprintf(msg, "write %d 0x%x\n\r", i, flash_buffer.w[i]);
+					// uart_cout((uint8_t*)msg, strlen(msg));
+					// program the word
+					flash_func_write_word(address, flash_buffer.w[i]);
+
+					// usleep(50);
+					// do immediate read-back verify
+					if (flash_func_read_word(address) != flash_buffer.w[i]) {
+						// try one more time to be sure...
+						flash_func_write_word(address, flash_buffer.w[i]);
+						//usleep(2000);
+						uint32_t read_word = flash_func_read_word(address);
+
+						if (read_word != flash_buffer.w[i]) {
+							sprintf(msg, "word %d: 0x%x\n\r", i, flash_buffer.w[i]);
+							uart_cout((uint8_t *)msg, strlen(msg));
+							sprintf(msg, "expect 0x%x, got 0x%x\n\r", flash_buffer.w[i], read_word);
+							uart_cout((uint8_t *)msg, strlen(msg));
+							goto cmd_fail;
+						}
+					}
+
+					// sprintf(msg, "wrote word %d\n\r", i);
+					// uart_cout((uint8_t*)msg, strlen(msg));
+					address += 4;
+				}
+
+				SET_BL_STATE(STATE_PROTO_PROG_MULTI);
+
+				break;
 			}
-
-			SET_BL_STATE(STATE_PROTO_PROG_MULTI);
-
-			break;
 
 		// fetch CRC of the entire flash area
 		//

@@ -474,6 +474,10 @@ flash_func_write_word(uint32_t address, uint32_t word)
 {
 	address += APP_LOAD_ADDRESS;
 	fc_write(address, word);
+	// int rv =
+	// char msg[24];
+	// sprintf(msg, "*%d @ %d\r\n", rv, address);
+	// uart_cout((uint8_t*)msg, strlen(msg));
 }
 
 uint32_t flash_func_read_word(uint32_t address)
@@ -731,6 +735,8 @@ bootloader_main(void)
 	 * we then time out.
 	 */
 	if (board_test_usart_receiving_break()) {
+		char *msg = "breaking out of bootloader...\n\r"; /// DEBUGGING
+		uart_cout((uint8_t *)msg, strlen(msg));
 		try_boot = false;
 	}
 
@@ -775,6 +781,10 @@ bootloader_main(void)
 
 
 	while (1) {
+
+		char *foo = "3 Hello, world!!\r\n";
+		uart_cout((uint8_t *)foo, strlen(foo)); /// DEBUGGING
+
 		/* run the bootloader, come back after an app is uploaded or we time out */
 		bootloader(timeout);
 
