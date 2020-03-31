@@ -36,8 +36,8 @@ px4_add_board(
 		#barometer # all available barometer drivers
 		barometer/ms5611
 		bootloaders
-		#differential_pressure # all available differential pressure drivers
-		#distance_sensor # all available distance sensor drivers
+		differential_pressure # all available differential pressure drivers
+		distance_sensor # all available distance sensor drivers
 		#dshot
 		gps
 		#imu # all available imu drivers
