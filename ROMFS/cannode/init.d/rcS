@@ -103,4 +103,9 @@ then
 	px4flow start -X
 fi
 
+#
+# Start additional sensors
+#
+sh /etc/init.d/rc.sensors
+
 uavcannode start
