@@ -56,9 +56,15 @@ px4_add_board(
 		#tone_alarm
 		uavcannode
 	MODULES
+		commander  # Needed for a few params for Mavlink
+		dataman  # Needed for navigator
 		#ekf2
 		#load_mon
+		#events
+		#load_mon
 		sensors
+		mavlink
+		navigator  # Needed for a few params for Commander
 		#temperature_compensation
 	SYSTEMCMDS
 		#bl_update
@@ -81,8 +87,9 @@ px4_add_board(
 		#sd_bench
 		#shutdown
 		top
-		#topic_listener
+		topic_listener
 		#tune_control
+		usb_connected
 		ver
 		work_queue
 )
