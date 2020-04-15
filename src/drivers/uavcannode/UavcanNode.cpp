@@ -80,6 +80,7 @@ UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &sys
 	_air_data_static_pressure_publisher(_node),
 	_air_data_static_temperature_publisher(_node),
 	_raw_air_data_publisher(_node),
+	_range_sensor_publisher(_node),
 	_cycle_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle time")),
 	_interval_perf(perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")),
 	_reset_timer(_node)
@@ -302,6 +303,7 @@ void UavcanNode::Run()
 		_sensor_baro_sub.registerCallback();
 		_sensor_mag_sub.registerCallback();
 		_vehicle_gps_position_sub.registerCallback();
+		_distance_sensor_sub.registerCallback();
 
 		_initialized = true;
 	}
@@ -370,6 +372,41 @@ void UavcanNode::Run()
 			// raw_air_data.pitot_temperature
 			// raw_air_data.covariance
 			_raw_air_data_publisher.broadcast(raw_air_data);
+		}
+	}
+
+	// distance_sensor -> uavcan::equipment::range_sensor::Measurement
+	if (_distance_sensor_sub.updated()) {
+		distance_sensor_s dist;
+
+		if (_distance_sensor_sub.copy(&dist)) {
+			uavcan::equipment::range_sensor::Measurement range_msg{};
+
+			range_msg.range = dist.current_distance;
+
+			switch (dist.type) {
+
+
+			case distance_sensor_s::MAV_DISTANCE_SENSOR_RADAR:
+				range_msg.sensor_type = uavcan::equipment::range_sensor::Measurement::SENSOR_TYPE_RADAR;
+				break;
+
+			case distance_sensor_s::MAV_DISTANCE_SENSOR_ULTRASOUND:
+				range_msg.sensor_type = uavcan::equipment::range_sensor::Measurement::SENSOR_TYPE_SONAR;
+				break;
+
+			case distance_sensor_s::MAV_DISTANCE_SENSOR_LASER:
+			default:
+				range_msg.sensor_type = uavcan::equipment::range_sensor::Measurement::SENSOR_TYPE_LIDAR;
+				break;
+			}
+
+			range_msg.timestamp = uavcan::Timestamp(uavcan::UtcTime());
+			range_msg.sensor_id = dist.id;
+			range_msg.field_of_view = fmin(dist.h_fov, dist.v_fov);
+			range_msg.reading_type = uavcan::equipment::range_sensor::Measurement::READING_TYPE_VALID_RANGE; /// TODO
+
+			_range_sensor_publisher.broadcast(range_msg);
 		}
 	}
 
