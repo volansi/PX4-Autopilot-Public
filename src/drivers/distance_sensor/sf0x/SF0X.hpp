@@ -84,6 +84,6 @@ private:
 	perf_counter_t			_sample_perf;
 	perf_counter_t			_comms_errors;
 
-
+	bool _simple_serial{false};
 
 };
