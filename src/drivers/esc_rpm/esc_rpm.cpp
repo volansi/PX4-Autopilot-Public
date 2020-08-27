@@ -64,9 +64,6 @@ EscRpm::EscRpm() :
 void
 EscRpm::start()
 {
-	// NOTE: must first publish here, first publication cannot be in interrupt context
-	_esc_rpm_pub.update();
-
 	// Initialize the GPIO rising edge ISRs and callback
 	gpio_init();
 
@@ -77,6 +74,15 @@ void
 EscRpm::gpio_init()
 {
 	irqstate_t state = px4_enter_critical_section();
+
+   /* * * * * * * * * * * * * * * * * *
+    *
+	* Add more GPIO inputs here and define them in board_config.h if you'd like more.
+	*
+	* GPIO_ESC_RPM_1 = PWM CH5
+	* GPIO_ESC_RPM_2 = PWM CH6
+	*
+	*/
 
 	// Configure GPIO
 	px4_arch_configgpio(GPIO_ESC_RPM_1);
@@ -97,13 +103,13 @@ EscRpm::Run()
 		return;
 	}
 
-	// TESTING:
+	// TESTING: remove when done testing
 	actuator_outputs_s actuators {};
 	actuators.output[0] = 200;
 	_actuator_outputs_pub.publish(actuators);
 
 	// Check if any of the motors have timed out -- this data is shared with ISR so we need to use a critical section
-	// Aalternatively we could double buffer, but this should have minimal overhead
+	// Alternatively we could ping pong buffer, but this should have minimal overhead
 	int state = px4_enter_critical_section();
 
 	int motor_rpm[MAX_MOTORS] {};
@@ -114,10 +120,10 @@ EscRpm::Run()
 
 		uint64_t time_since_last_revolution =  now - _motor_data_array[i].start_time;
 
-		if (time_since_last_revolution > 500000) {
+		if (time_since_last_revolution > MOTOR_TIMEOUT_US) {
 
 			if (!_motor_data_array[i].timed_out) {
-				PX4_INFO("motor: %d timed out", i+1);
+				PX4_INFO("motor %d timed out", i+1);
 			}
 
 			_motor_data_array[i].timed_out = true;
@@ -173,16 +179,17 @@ EscRpm::isr_callback_handler(int motor_number)
 
 	motor->pulse_count++;
 
+	// Check if we've completed a full revolution
 	if (motor->pulse_count == _pulses_per_revolution) {
 
 		uint64_t time_now = hrt_absolute_time();
 		uint64_t time_delta_us = time_now - motor->start_time;
 		motor->start_time = time_now;
 
-		float frequency_instantaneous = 1.0 / (time_delta_us / 1e6);
+		float rpm_instantaneous = 60 * 1e6 / time_delta_us;
 
 		// TODO: apply a low pass or complimentary filter?
-		motor->rpm = frequency_instantaneous * 60; // convert from cycles per second to cycles per minute
+		motor->rpm = rpm_instantaneous;
 
 		// Reset the counter
 		motor->pulse_count = 0;

@@ -1,4 +1,4 @@
 uint64 timestamp					# time since system start (microseconds)
 
 									# TODO: we are making some assumptions about GPIOs and their indices in the array
-int32[4] esc_rpm					# Motor RPM, negative for reverse rotation [RPM] - if supported
+int32[8] esc_rpm					# Motor RPM, negative for reverse rotation [RPM] - if supported
