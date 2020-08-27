@@ -45,7 +45,7 @@
 using namespace time_literals;
 
 static constexpr int MAX_MOTORS = 4;
-static constexpr uint64_t MOTOR_TIMEOUT_MS =  500_ms; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
+static constexpr uint64_t MOTOR_TIMEOUT_US =  500000; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
 
 class EscRpm : public ModuleBase<EscRpm>, public px4::ScheduledWorkItem
 {
@@ -80,7 +80,6 @@ private:
 
 	uORB::PublicationData<esc_rpm_s> _esc_rpm_pub{ORB_ID(esc_rpm)};
 
+	// TESTING: remove when done testing
 	uORB::PublicationData<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};
-
-
 };

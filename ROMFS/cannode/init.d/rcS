@@ -108,4 +108,5 @@ uavcannode start
 if param compare CANNODE_ESC_EN 1
 then
 	pwm_out_cannode start
+	esc_rpm start
 fi
