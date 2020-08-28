@@ -57,6 +57,7 @@ px4_add_board(
 		#tone_alarm
 		uavcannode
 	MODULES
+		analog_measurement
 		#ekf2
 		#load_mon
 		sensors

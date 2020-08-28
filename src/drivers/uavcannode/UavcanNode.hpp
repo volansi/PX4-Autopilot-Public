@@ -67,6 +67,7 @@
 #include <uavcan/equipment/gnss/Fix2.hpp>
 #include <uavcan/equipment/power/BatteryInfo.hpp>
 #include <uavcan/equipment/range_sensor/Measurement.hpp>
+#include <com/volansi/equipment/adc/AnalogMeasurement.hpp>
 
 
 #include <lib/parameters/param.h>
@@ -78,10 +79,11 @@
 #include <uORB/PublicationMulti.hpp>
 
 #include <uORB/topics/actuator_outputs.h>
+#include <uORB/topics/analog_measurement.h>
 #include <uORB/topics/battery_status.h>
-#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/differential_pressure.h>
 #include <uORB/topics/distance_sensor.h>
+#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/sensor_baro.h>
 #include <uORB/topics/sensor_mag.h>
 #include <uORB/topics/vehicle_gps_position.h>
@@ -157,6 +159,7 @@ private:
 	void update_parameters();
 	void fill_node_info();
 
+	void send_analog_measurements();
 	void send_esc_status();
 	void send_battery_info();
 	void send_raw_air_data();
@@ -214,9 +217,9 @@ private:
 	uavcan::Publisher<uavcan::equipment::air_data::RawAirData> _raw_air_data_publisher;
 	uavcan::Publisher<uavcan::equipment::range_sensor::Measurement> _range_sensor_measurement;
 	uavcan::Publisher<uavcan::equipment::esc::Status> _esc_status_publisher;
+	uavcan::Publisher<com::volansi::equipment::adc::AnalogMeasurement> _analog_measurement_publisher;
 
 	uavcan::Subscriber<uavcan::equipment::esc::RawCommand, RawCommandCbBinder>	_uavcan_esc_raw_command_sub;
-
 
 	hrt_abstime _last_esc_status_publish{0};
 	hrt_abstime _last_static_temperature_publish{0};
@@ -234,6 +237,8 @@ private:
 	uORB::SubscriptionCallbackWorkItem _sensor_baro_sub{this, ORB_ID(sensor_baro)};
 	uORB::SubscriptionCallbackWorkItem _sensor_mag_sub{this, ORB_ID(sensor_mag)};
 	uORB::SubscriptionCallbackWorkItem _vehicle_gps_position_sub{this, ORB_ID(vehicle_gps_position)};
+	uORB::SubscriptionCallbackWorkItem _analog_report_sub{this, ORB_ID(analog_measurement)};
+
 
 	uORB::Subscription _esc_rpm_sub {ORB_ID(esc_rpm)};
 

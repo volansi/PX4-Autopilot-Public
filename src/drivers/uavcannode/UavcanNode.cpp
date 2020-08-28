@@ -82,6 +82,7 @@ UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &sys
 	_raw_air_data_publisher(_node),
 	_range_sensor_measurement(_node),
 	_esc_status_publisher(_node),
+	_analog_measurement_publisher(_node),
 	_uavcan_esc_raw_command_sub(_node),
 	_cycle_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle time")),
 	_interval_perf(perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")),
@@ -417,6 +418,7 @@ void UavcanNode::Run()
 
 	// Send uavcan messages with data from the system
 	send_esc_status();
+	send_analog_measurements();
 	send_battery_info();
 	send_raw_air_data();
 	send_static_pressure();
@@ -468,7 +470,7 @@ void UavcanNode::send_battery_info()
 {
 	// battery_status -> uavcan::equipment::power::BatteryInfo
 	if (_battery_status_sub.updated()) {
-		battery_status_s battery;
+		battery_status_s battery{};
 
 		if (_battery_status_sub.copy(&battery)) {
 			uavcan::equipment::power::BatteryInfo battery_info{};
@@ -501,7 +503,7 @@ void UavcanNode::send_raw_air_data()
 {
 	// differential_pressure -> uavcan::equipment::air_data::RawAirData
 	if (_diff_pressure_sub.updated()) {
-		differential_pressure_s diff_press;
+		differential_pressure_s diff_press{};
 
 		if (_diff_pressure_sub.copy(&diff_press)) {
 
@@ -519,87 +521,11 @@ void UavcanNode::send_raw_air_data()
 	}
 }
 
-void UavcanNode::send_static_pressure()
-{
-	// sensor_baro -> uavcan::equipment::air_data::StaticTemperature
-	if (_sensor_baro_sub.updated()) {
-		sensor_baro_s baro;
-
-		if (_sensor_baro_sub.copy(&baro)) {
-			uavcan::equipment::air_data::StaticPressure static_pressure{};
-			static_pressure.static_pressure = baro.pressure * 100; // millibar -> pascals
-			_air_data_static_pressure_publisher.broadcast(static_pressure);
-
-			if (hrt_elapsed_time(&_last_static_temperature_publish) > 1_s) {
-				uavcan::equipment::air_data::StaticTemperature static_temperature{};
-				static_temperature.static_temperature = baro.temperature + CONSTANTS_ABSOLUTE_NULL_CELSIUS;
-				_air_data_static_temperature_publisher.broadcast(static_temperature);
-				_last_static_temperature_publish = hrt_absolute_time();
-			}
-		}
-	}
-}
-
-void UavcanNode::send_magnetic_field_strength2()
-{
-	// sensor_mag -> uavcan::equipment::ahrs::MagneticFieldStrength2
-	if (_sensor_mag_sub.updated()) {
-		sensor_mag_s mag;
-
-		if (_sensor_mag_sub.copy(&mag)) {
-			uavcan::equipment::ahrs::MagneticFieldStrength2 magnetic_field{};
-			magnetic_field.sensor_id = mag.device_id;
-			magnetic_field.magnetic_field_ga[0] = mag.x;
-			magnetic_field.magnetic_field_ga[1] = mag.y;
-			magnetic_field.magnetic_field_ga[2] = mag.z;
-			_ahrs_magnetic_field_strength2_publisher.broadcast(magnetic_field);
-		}
-	}
-}
-
-void UavcanNode::send_gnss_fix2()
-{
-	// vehicle_gps_position -> uavcan::equipment::gnss::Fix2
-	if (_vehicle_gps_position_sub.updated()) {
-		vehicle_gps_position_s gps;
-
-		if (_vehicle_gps_position_sub.copy(&gps)) {
-			uavcan::equipment::gnss::Fix2 fix2{};
-
-			fix2.gnss_time_standard = fix2.GNSS_TIME_STANDARD_UTC;
-			fix2.gnss_timestamp.usec = gps.time_utc_usec;
-			fix2.latitude_deg_1e8 = (int64_t)gps.lat * 10;
-			fix2.longitude_deg_1e8 = (int64_t)gps.lon * 10;
-			fix2.height_msl_mm = gps.alt;
-			fix2.height_ellipsoid_mm = gps.alt_ellipsoid;
-			fix2.status = gps.fix_type;
-			fix2.ned_velocity[0] = gps.vel_n_m_s;
-			fix2.ned_velocity[1] = gps.vel_e_m_s;
-			fix2.ned_velocity[2] = gps.vel_d_m_s;
-			fix2.pdop = gps.hdop > gps.vdop ? gps.hdop :
-				    gps.vdop; // Use pdop for both hdop and vdop since uavcan v0 spec does not support them
-			fix2.sats_used = gps.satellites_used;
-
-			// Diagonal matrix
-			// position variances -- Xx, Yy, Zz
-			fix2.covariance.push_back(gps.eph);
-			fix2.covariance.push_back(gps.eph);
-			fix2.covariance.push_back(gps.eph);
-			// velocity variance -- Vxx, Vyy, Vzz
-			fix2.covariance.push_back(gps.s_variance_m_s);
-			fix2.covariance.push_back(gps.s_variance_m_s);
-			fix2.covariance.push_back(gps.s_variance_m_s);
-
-			_gnss_fix2_publisher.broadcast(fix2);
-		}
-	}
-}
-
 void UavcanNode::send_range_sensor_measurement()
 {
 	// distance_sensor[] -> uavcan::equipment::range_sensor::Measurement
 	for (int i = 0; i < ORB_MULTI_MAX_INSTANCES; i++) {
-		distance_sensor_s dist;
+		distance_sensor_s dist{};
 
 		if (_distance_sensor_sub[i].update(&dist)) {
 			uavcan::equipment::range_sensor::Measurement range_sensor{};
@@ -643,6 +569,104 @@ void UavcanNode::send_range_sensor_measurement()
 			}
 
 			_range_sensor_measurement.broadcast(range_sensor);
+		}
+	}
+}
+
+void UavcanNode::send_static_pressure()
+{
+	// sensor_baro -> uavcan::equipment::air_data::StaticTemperature
+	if (_sensor_baro_sub.updated()) {
+		sensor_baro_s baro{};
+
+		if (_sensor_baro_sub.copy(&baro)) {
+			uavcan::equipment::air_data::StaticPressure static_pressure{};
+			static_pressure.static_pressure = baro.pressure * 100; // millibar -> pascals
+			_air_data_static_pressure_publisher.broadcast(static_pressure);
+
+			if (hrt_elapsed_time(&_last_static_temperature_publish) > 1_s) {
+				uavcan::equipment::air_data::StaticTemperature static_temperature{};
+				static_temperature.static_temperature = baro.temperature + CONSTANTS_ABSOLUTE_NULL_CELSIUS;
+				_air_data_static_temperature_publisher.broadcast(static_temperature);
+				_last_static_temperature_publish = hrt_absolute_time();
+			}
+		}
+	}
+}
+
+void UavcanNode::send_magnetic_field_strength2()
+{
+	// sensor_mag -> uavcan::equipment::ahrs::MagneticFieldStrength2
+	if (_sensor_mag_sub.updated()) {
+		sensor_mag_s mag{};
+
+		if (_sensor_mag_sub.copy(&mag)) {
+			uavcan::equipment::ahrs::MagneticFieldStrength2 magnetic_field{};
+			magnetic_field.sensor_id = mag.device_id;
+			magnetic_field.magnetic_field_ga[0] = mag.x;
+			magnetic_field.magnetic_field_ga[1] = mag.y;
+			magnetic_field.magnetic_field_ga[2] = mag.z;
+			_ahrs_magnetic_field_strength2_publisher.broadcast(magnetic_field);
+		}
+	}
+}
+
+void UavcanNode::send_gnss_fix2()
+{
+	// vehicle_gps_position -> uavcan::equipment::gnss::Fix2
+	if (_vehicle_gps_position_sub.updated()) {
+		vehicle_gps_position_s gps{};
+
+		if (_vehicle_gps_position_sub.copy(&gps)) {
+			uavcan::equipment::gnss::Fix2 fix2{};
+
+			fix2.gnss_time_standard = fix2.GNSS_TIME_STANDARD_UTC;
+			fix2.gnss_timestamp.usec = gps.time_utc_usec;
+			fix2.latitude_deg_1e8 = (int64_t)gps.lat * 10;
+			fix2.longitude_deg_1e8 = (int64_t)gps.lon * 10;
+			fix2.height_msl_mm = gps.alt;
+			fix2.height_ellipsoid_mm = gps.alt_ellipsoid;
+			fix2.status = gps.fix_type;
+			fix2.ned_velocity[0] = gps.vel_n_m_s;
+			fix2.ned_velocity[1] = gps.vel_e_m_s;
+			fix2.ned_velocity[2] = gps.vel_d_m_s;
+			fix2.pdop = gps.hdop > gps.vdop ? gps.hdop :
+				    gps.vdop; // Use pdop for both hdop and vdop since uavcan v0 spec does not support them
+			fix2.sats_used = gps.satellites_used;
+
+			// Diagonal matrix
+			// position variances -- Xx, Yy, Zz
+			fix2.covariance.push_back(gps.eph);
+			fix2.covariance.push_back(gps.eph);
+			fix2.covariance.push_back(gps.eph);
+			// velocity variance -- Vxx, Vyy, Vzz
+			fix2.covariance.push_back(gps.s_variance_m_s);
+			fix2.covariance.push_back(gps.s_variance_m_s);
+			fix2.covariance.push_back(gps.s_variance_m_s);
+
+			_gnss_fix2_publisher.broadcast(fix2);
+		}
+	}
+}
+
+void UavcanNode::send_analog_measurements()
+{
+	// vehicle_gps_position -> uavcan::equipment::gnss::Fix2
+	if (_analog_report_sub.updated()) {
+		analog_measurement_s measurement{};
+
+		if (_analog_report_sub.copy(&measurement)) {
+
+			com::volansi::equipment::adc::AnalogMeasurement report{};
+
+			for (size_t i = 0; i < sizeof(measurement.values)/sizeof(measurement.values[0]); i++) {
+				if (measurement.unit_type[i]) {
+					report.unit_type[i] = measurement.unit_type[i];
+					report.values[i] = measurement.values[i];
+				}
+			}
+
+			_analog_measurement_publisher.broadcast(report);
 		}
 	}
 }
