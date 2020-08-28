@@ -441,8 +441,8 @@ void UavcanNode::send_esc_status()
 
 		if (hrt_elapsed_time(&_last_esc_status_publish) > 100_ms) {
 			// TODO: the only status information we have is potentially RPM measurements from up to .. 4 .. ESCs (arbitrary number).
-			// TODO: FIXME: we publish status information for up to 8 ESCs, but we only allow 4 RPM measurements
-			for (size_t i = 0; i < 8; i++) {
+			// TODO: FIXME: we publish status information for up to CONNECTED_ESC_MAX ESCs, but we only allow 4 RPM measurements
+			for (size_t i = 0; i < esc_status_s::CONNECTED_ESC_MAX; i++) {
 				if (_esc_mask & 1 << i) {
 					uavcan::equipment::esc::Status esc_status{};
 					esc_status.esc_index = i;
@@ -450,12 +450,11 @@ void UavcanNode::send_esc_status()
 					// TODO: if we are trying to update here faster than the esc_rpm topic is being updated (currently 100Hz), then we will
 					// accidentally be inserting stray 0 values. This should be fixed by checking the timestamp, but ultimately I'd like to
 					// take the opportunity to add an is_stale() and set_stale_timeout() functions to uORB::Subscription since this pattern is so common.
-					esc_rpm_s esc_rpm {};
 					if (_esc_rpm_sub.updated()) {
-						_esc_rpm_sub.copy(&esc_rpm);
+						_esc_rpm_sub.copy(&_esc_rpm);
 					}
 
-					esc_status.rpm = esc_rpm.esc_rpm[i];
+					esc_status.rpm = _esc_rpm.esc_rpm[i];
 					_esc_status_publisher.broadcast(esc_status);
 				}
 			}

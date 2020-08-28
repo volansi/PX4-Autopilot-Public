@@ -75,8 +75,8 @@ EscRpm::gpio_init()
 {
 	irqstate_t state = px4_enter_critical_section();
 
-   /* * * * * * * * * * * * * * * * * *
-    *
+	/* * * * * * * * * * * * * * * * * *
+	*
 	* Add more GPIO inputs here and define them in board_config.h if you'd like more.
 	*
 	* GPIO_ESC_RPM_1 = PWM CH5
@@ -110,7 +110,7 @@ EscRpm::Run()
 
 	// Check if any of the motors have timed out -- this data is shared with ISR so we need to use a critical section
 	// Alternatively we could ping pong buffer, but this should have minimal overhead
-	int state = px4_enter_critical_section();
+	irqstate_t state = px4_enter_critical_section();
 
 	int motor_rpm[MAX_MOTORS] {};
 
@@ -123,7 +123,7 @@ EscRpm::Run()
 		if (time_since_last_revolution > MOTOR_TIMEOUT_US) {
 
 			if (!_motor_data_array[i].timed_out) {
-				PX4_INFO("motor %d timed out", i+1);
+				PX4_INFO("motor %d timed out", i + 1);
 			}
 
 			_motor_data_array[i].timed_out = true;
@@ -152,7 +152,7 @@ EscRpm::Run()
 int
 EscRpm::isr_callback1(int irq, void *context, void *arg)
 {
-	auto obj = static_cast<EscRpm*>(arg);
+	auto obj = static_cast<EscRpm *>(arg);
 	obj->isr_callback_handler(1);
 	return PX4_OK;
 }
@@ -160,7 +160,7 @@ EscRpm::isr_callback1(int irq, void *context, void *arg)
 int
 EscRpm::isr_callback2(int irq, void *context, void *arg)
 {
-	auto obj = static_cast<EscRpm*>(arg);
+	auto obj = static_cast<EscRpm *>(arg);
 	obj->isr_callback_handler(2);
 	return PX4_OK;
 }
@@ -168,7 +168,7 @@ EscRpm::isr_callback2(int irq, void *context, void *arg)
 void
 EscRpm::isr_callback_handler(int motor_number)
 {
-	MotorData* motor = &_motor_data_array[motor_number - 1]; // Motors are labelled 1-4 but indexed 0-3
+	MotorData *motor = &_motor_data_array[motor_number - 1]; // Motors are labelled 1-4 but indexed 0-3
 
 	if (motor->timed_out) {
 		PX4_INFO("ISR: motor: %d timed out", motor_number);
