@@ -88,6 +88,7 @@
 #include <uORB/topics/sensor_mag.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/esc_rpm.h>
+#include <uORB/topics/esc_status.h>
 
 
 /**
@@ -239,11 +240,11 @@ private:
 	uORB::SubscriptionCallbackWorkItem _vehicle_gps_position_sub{this, ORB_ID(vehicle_gps_position)};
 	uORB::SubscriptionCallbackWorkItem _analog_report_sub{this, ORB_ID(analog_measurement)};
 
-
 	uORB::Subscription _esc_rpm_sub {ORB_ID(esc_rpm)};
 
-
 	uORB::PublicationMulti<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};
+
+	esc_rpm_s _esc_rpm;
 
 	perf_counter_t _cycle_perf;
 	perf_counter_t _interval_perf;
