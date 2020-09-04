@@ -38,7 +38,7 @@ px4_add_board(
 		bootloaders
 		#differential_pressure # all available differential pressure drivers
 		distance_sensor # all available distance sensor drivers
-		esc_rpm
+		rpm/gpio_rpm
 		#dshot
 		gps
 		#imu # all available imu drivers

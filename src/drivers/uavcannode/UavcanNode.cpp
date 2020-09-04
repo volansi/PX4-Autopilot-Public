@@ -83,6 +83,7 @@ UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &sys
 	_range_sensor_measurement(_node),
 	_esc_status_publisher(_node),
 	_analog_measurement_publisher(_node),
+	_gpio_rpm_publisher(_node),
 	_uavcan_esc_raw_command_sub(_node),
 	_cycle_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle time")),
 	_interval_perf(perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")),
@@ -383,16 +384,18 @@ void UavcanNode::Run()
 
 		_node.setModeOperational();
 
+		_analog_report_sub.registerCallback();
+		_battery_status_sub.registerCallback();
 		_diff_pressure_sub.registerCallback();
 
 		for (auto &dist : _distance_sensor_sub) {
 			dist.registerCallback();
 		}
 
+		_gpio_rpm_sub.registerCallback();
 		_sensor_baro_sub.registerCallback();
 		_sensor_mag_sub.registerCallback();
 		_vehicle_gps_position_sub.registerCallback();
-		_battery_status_sub.registerCallback();
 
 		_initialized = true;
 	}
@@ -417,13 +420,14 @@ void UavcanNode::Run()
 	}
 
 	// Send uavcan messages with data from the system
-	send_esc_status();
 	send_analog_measurements();
 	send_battery_info();
+	send_esc_status();
+	send_gnss_fix2();
+	send_gpio_rpm_measurements();
+	send_magnetic_field_strength2();
 	send_raw_air_data();
 	send_static_pressure();
-	send_magnetic_field_strength2();
-	send_gnss_fix2();
 
 	perf_end(_cycle_perf);
 
@@ -449,14 +453,10 @@ void UavcanNode::send_esc_status()
 					uavcan::equipment::esc::Status esc_status{};
 					esc_status.esc_index = i;
 
-					// TODO: if we are trying to update here faster than the esc_rpm topic is being updated (currently 100Hz), then we will
-					// accidentally be inserting stray 0 values. This should be fixed by checking the timestamp, but ultimately I'd like to
-					// take the opportunity to add an is_stale() and set_stale_timeout() functions to uORB::Subscription since this pattern is so common.
-					if (_esc_rpm_sub.updated()) {
-						_esc_rpm_sub.copy(&_esc_rpm);
+					// _gpio_rpm is updated in send_gpio_rpm_measurements()
+					if (i < GPIO_INPUT_RPM_MAX_MOTORS) {
+						esc_status.rpm = _gpio_rpm.rpm[i];
 					}
-
-					esc_status.rpm = _esc_rpm.esc_rpm[i];
 					_esc_status_publisher.broadcast(esc_status);
 				}
 			}
@@ -668,6 +668,21 @@ void UavcanNode::send_analog_measurements()
 
 			_analog_measurement_publisher.broadcast(report);
 		}
+	}
+}
+
+void UavcanNode::send_gpio_rpm_measurements()
+{
+	if (_gpio_rpm_sub.updated()) {
+		_gpio_rpm_sub.copy(&_gpio_rpm);
+
+		com::volansi::equipment::gpio::Rpm report{};
+		// Publish generic RPM
+		for (size_t i = 0; i < GPIO_INPUT_RPM_MAX_MOTORS; i++) {
+			report.rpm[i] = _gpio_rpm.rpm[i];
+		}
+
+		_gpio_rpm_publisher.broadcast(report);
 	}
 }
 

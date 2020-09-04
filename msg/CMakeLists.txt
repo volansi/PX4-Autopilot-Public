@@ -60,13 +60,13 @@ set(msg_files
 	ekf_gps_drift.msg
 	ekf_gps_position.msg
 	esc_report.msg
-	esc_rpm.msg
 	esc_status.msg
 	estimator_innovations.msg
 	estimator_sensor_bias.msg
 	estimator_status.msg
 	follow_target.msg
 	geofence_result.msg
+	gpio_rpm.msg
 	gps_dump.msg
 	gps_inject_data.msg
 	home_position.msg

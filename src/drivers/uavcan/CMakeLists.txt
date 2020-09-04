@@ -137,6 +137,7 @@ px4_add_module(
 		sensors/flow.cpp
 		sensors/gnss.cpp
 		sensors/mag.cpp
+		sensors/rpm.cpp
 		sensors/sensor_bridge.cpp
 
 	DEPENDS

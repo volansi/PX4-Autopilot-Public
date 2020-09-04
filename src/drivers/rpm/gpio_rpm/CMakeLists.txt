@@ -31,11 +31,11 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE drivers__esc_rpm
-	MAIN esc_rpm
+	MODULE drivers__gpio_rpm
+	MAIN gpio_rpm
 	COMPILE_FLAGS
 		-Wno-pmf-conversions
 		-Wno-cast-align # TODO: fix and enable
 	SRCS
-		esc_rpm.cpp
+		gpio_rpm.cpp
 	)

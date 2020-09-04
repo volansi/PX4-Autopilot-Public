@@ -31,30 +31,30 @@
  *
  ****************************************************************************/
 
-#include "esc_rpm.h"
+#include "gpio_rpm.h"
 
 int
-EscRpm::task_spawn(int argc, char *argv[])
+GpioRpm::task_spawn(int argc, char *argv[])
 {
-	auto *escRpm = new EscRpm();
+	auto *gpioRpm = new GpioRpm();
 
-	if (!escRpm) {
+	if (!gpioRpm) {
 		PX4_ERR("driver allocation failed");
 		return PX4_ERROR;
 	}
 
-	_object.store(escRpm);
+	_object.store(gpioRpm);
 	_task_id = task_id_is_work_queue;
 
-	escRpm->start();
+	gpioRpm->start();
 
 	return PX4_OK;
 }
 
-EscRpm::EscRpm() :
+GpioRpm::GpioRpm() :
 	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::lp_default)
 {
-	param_get(param_find("ESC_RPM_PULSES"), &_pulses_per_revolution);
+	param_get(param_find("GPIO_RPM_PULSES"), &_pulses_per_revolution);
 
 	for (size_t i = 0; i < MAX_MOTORS; i++) {
 		_motor_data_array[i].timed_out = true;
@@ -62,7 +62,7 @@ EscRpm::EscRpm() :
 }
 
 void
-EscRpm::start()
+GpioRpm::start()
 {
 	// Initialize the GPIO rising edge ISRs and callback
 	gpio_init();
@@ -71,7 +71,7 @@ EscRpm::start()
 }
 
 void
-EscRpm::gpio_init()
+GpioRpm::gpio_init()
 {
 	irqstate_t state = px4_enter_critical_section();
 
@@ -79,24 +79,24 @@ EscRpm::gpio_init()
 	*
 	* Add more GPIO inputs here and define them in board_config.h if you'd like more.
 	*
-	* GPIO_ESC_RPM_1 = PWM CH5
-	* GPIO_ESC_RPM_2 = PWM CH6
+	* GPIO_RPM_1 = PWM CH5
+	* GPIO_RPM_2 = PWM CH6
 	*
 	*/
 
 	// Configure GPIO
-	px4_arch_configgpio(GPIO_ESC_RPM_1);
-	px4_arch_configgpio(GPIO_ESC_RPM_2);
+	px4_arch_configgpio(GPIO_INPUT_RPM_1);
+	px4_arch_configgpio(GPIO_INPUT_RPM_2);
 
 	// Setup data ready on rising edge
-	px4_arch_gpiosetevent(GPIO_ESC_RPM_1, true, false, true, &EscRpm::isr_callback1, this);
-	px4_arch_gpiosetevent(GPIO_ESC_RPM_2, true, false, true, &EscRpm::isr_callback2, this);
+	px4_arch_gpiosetevent(GPIO_INPUT_RPM_1, true, false, true, &GpioRpm::isr_callback1, this);
+	px4_arch_gpiosetevent(GPIO_INPUT_RPM_2, true, false, true, &GpioRpm::isr_callback2, this);
 
 	px4_leave_critical_section(state);
 }
 
 void
-EscRpm::Run()
+GpioRpm::Run()
 {
 	if (should_exit()) {
 		exit_and_cleanup();
@@ -112,9 +112,10 @@ EscRpm::Run()
 	// Alternatively we could ping pong buffer, but this should have minimal overhead
 	irqstate_t state = px4_enter_critical_section();
 
-	int motor_rpm[MAX_MOTORS] {};
-
 	uint64_t now = hrt_absolute_time();
+
+	gpio_rpm_s report {};
+	report.timestamp = now;
 
 	for (size_t i = 0; i < MAX_MOTORS; i++) {
 
@@ -132,41 +133,32 @@ EscRpm::Run()
 		}
 
 		// We make a copy so we can leave the critical section to publish
-		motor_rpm[i] = _motor_data_array[i].rpm;
+		report.rpm[i] = _motor_data_array[i].rpm;
 	}
 
 	px4_leave_critical_section(state);
 
-	// Publish data for motors
-	esc_rpm_s report {};
-
-	report.timestamp = now;
-	report.esc_rpm[0] = motor_rpm[0];
-	report.esc_rpm[1] = motor_rpm[1];
-	report.esc_rpm[2] = motor_rpm[2];
-	report.esc_rpm[3] = motor_rpm[3];
-
-	_esc_rpm_pub.publish(report);
+	_gpio_rpm_pub.publish(report);
 }
 
 int
-EscRpm::isr_callback1(int irq, void *context, void *arg)
+GpioRpm::isr_callback1(int irq, void *context, void *arg)
 {
-	auto obj = static_cast<EscRpm *>(arg);
+	auto obj = static_cast<GpioRpm *>(arg);
 	obj->isr_callback_handler(1);
 	return PX4_OK;
 }
 
 int
-EscRpm::isr_callback2(int irq, void *context, void *arg)
+GpioRpm::isr_callback2(int irq, void *context, void *arg)
 {
-	auto obj = static_cast<EscRpm *>(arg);
+	auto obj = static_cast<GpioRpm *>(arg);
 	obj->isr_callback_handler(2);
 	return PX4_OK;
 }
 
 void
-EscRpm::isr_callback_handler(int motor_number)
+GpioRpm::isr_callback_handler(int motor_number)
 {
 	MotorData *motor = &_motor_data_array[motor_number - 1]; // Motors are labelled 1-4 but indexed 0-3
 
@@ -197,7 +189,7 @@ EscRpm::isr_callback_handler(int motor_number)
 }
 
 int
-EscRpm::print_usage(const char *reason)
+GpioRpm::print_usage(const char *reason)
 {
 	if (reason) {
 		printf("%s\n\n", reason);
@@ -210,16 +202,16 @@ Measures the RPM of a connected motor by counting the number of input pulses per
 
 )DESCR_STR");
 
-	PRINT_MODULE_USAGE_NAME("esc_rpm", "system");
+	PRINT_MODULE_USAGE_NAME("gpio_rpm", "system");
 	PRINT_MODULE_USAGE_COMMAND("start");
-	PRINT_MODULE_USAGE_COMMAND_DESCR("info", "prints esc_rpm capture info.");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("info", "prints gpio_rpm capture info.");
 	PRINT_MODULE_USAGE_DEFAULT_COMMANDS();
 
 	return PX4_OK;
 }
 
 int
-EscRpm::custom_command(int argc, char *argv[])
+GpioRpm::custom_command(int argc, char *argv[])
 {
 	const char *input = argv[0];
 	auto *obj = get_instance();
@@ -236,7 +228,7 @@ EscRpm::custom_command(int argc, char *argv[])
 	return PX4_ERROR;
 }
 
-extern "C" __EXPORT int esc_rpm_main(int argc, char *argv[])
+extern "C" __EXPORT int gpio_rpm_main(int argc, char *argv[])
 {
-	return EscRpm::main(argc, argv);
+	return GpioRpm::main(argc, argv);
 }

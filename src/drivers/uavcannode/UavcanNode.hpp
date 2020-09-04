@@ -68,7 +68,7 @@
 #include <uavcan/equipment/power/BatteryInfo.hpp>
 #include <uavcan/equipment/range_sensor/Measurement.hpp>
 #include <com/volansi/equipment/adc/AnalogMeasurement.hpp>
-
+#include <com/volansi/equipment/gpio/Rpm.hpp>
 
 #include <lib/parameters/param.h>
 #include <lib/perf/perf_counter.h>
@@ -87,7 +87,7 @@
 #include <uORB/topics/sensor_baro.h>
 #include <uORB/topics/sensor_mag.h>
 #include <uORB/topics/vehicle_gps_position.h>
-#include <uORB/topics/esc_rpm.h>
+#include <uORB/topics/gpio_rpm.h>
 #include <uORB/topics/esc_status.h>
 
 
@@ -168,6 +168,7 @@ private:
 	void send_magnetic_field_strength2();
 	void send_gnss_fix2();
 	void send_range_sensor_measurement();
+	void send_gpio_rpm_measurements();
 
 	void remap_esc_indices(actuator_outputs_s& outputs);
 
@@ -219,6 +220,8 @@ private:
 	uavcan::Publisher<uavcan::equipment::range_sensor::Measurement> _range_sensor_measurement;
 	uavcan::Publisher<uavcan::equipment::esc::Status> _esc_status_publisher;
 	uavcan::Publisher<com::volansi::equipment::adc::AnalogMeasurement> _analog_measurement_publisher;
+	uavcan::Publisher<com::volansi::equipment::gpio::Rpm> _gpio_rpm_publisher;
+
 
 	uavcan::Subscriber<uavcan::equipment::esc::RawCommand, RawCommandCbBinder>	_uavcan_esc_raw_command_sub;
 
@@ -240,11 +243,11 @@ private:
 	uORB::SubscriptionCallbackWorkItem _vehicle_gps_position_sub{this, ORB_ID(vehicle_gps_position)};
 	uORB::SubscriptionCallbackWorkItem _analog_report_sub{this, ORB_ID(analog_measurement)};
 
-	uORB::Subscription _esc_rpm_sub {ORB_ID(esc_rpm)};
+	uORB::SubscriptionCallbackWorkItem _gpio_rpm_sub {this, ORB_ID(gpio_rpm)};
 
 	uORB::PublicationMulti<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};
 
-	esc_rpm_s _esc_rpm;
+	gpio_rpm_s _gpio_rpm;
 
 	perf_counter_t _cycle_perf;
 	perf_counter_t _interval_perf;

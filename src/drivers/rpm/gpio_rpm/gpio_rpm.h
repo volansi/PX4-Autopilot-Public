@@ -39,18 +39,18 @@
 
 #include <uORB/uORB.h>
 #include <uORB/Publication.hpp>
-#include <uORB/topics/esc_rpm.h>
+#include <uORB/topics/gpio_rpm.h>
 #include <uORB/topics/actuator_outputs.h>
 
 using namespace time_literals;
 
-static constexpr int MAX_MOTORS = 4;
+static constexpr int MAX_MOTORS = GPIO_INPUT_RPM_MAX_MOTORS;
 static constexpr uint64_t MOTOR_TIMEOUT_US =  500000; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
 
-class EscRpm : public ModuleBase<EscRpm>, public px4::ScheduledWorkItem
+class GpioRpm : public ModuleBase<GpioRpm>, public px4::ScheduledWorkItem
 {
 public:
-	EscRpm();
+	GpioRpm();
 	void start();
 
 	static int isr_callback1(int irq, void *context, void *arg);
@@ -78,7 +78,7 @@ private:
 
 	int _pulses_per_revolution {};
 
-	uORB::PublicationData<esc_rpm_s> _esc_rpm_pub{ORB_ID(esc_rpm)};
+	uORB::PublicationData<gpio_rpm_s> _gpio_rpm_pub{ORB_ID(gpio_rpm)};
 
 	// TESTING: remove when done testing
 	uORB::PublicationData<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};

@@ -46,6 +46,7 @@
 #include "gnss.hpp"
 #include "flow.hpp"
 #include "mag.hpp"
+#include "rpm.hpp"
 
 /*
  * IUavcanSensorBridge
@@ -60,6 +61,7 @@ void IUavcanSensorBridge::make_all(uavcan::INode &node, List<IUavcanSensorBridge
 	list.add(new UavcanAirspeedBridge(node));
 	list.add(new UavcanDifferentialPressureBridge(node));
 	list.add(new UavcanAnalogMeasurementBridge(node));
+	list.add(new UavcanRpmBridge(node));
 }
 
 /*
