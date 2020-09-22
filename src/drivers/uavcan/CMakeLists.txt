@@ -129,15 +129,17 @@ px4_add_module(
 		actuators/hardpoint.cpp
 
 		# Sensors
-		sensors/sensor_bridge.cpp
-		sensors/differential_pressure.cpp
+		sensors/analog_measurement.cpp
+		sensors/airspeed.cpp
 		sensors/baro.cpp
 		sensors/battery.cpp
-		sensors/airspeed.cpp
+		sensors/differential_pressure.cpp
 		sensors/flow.cpp
 		sensors/gnss.cpp
 		sensors/mag.cpp
 		sensors/rangefinder.cpp
+		sensors/rpm.cpp
+		sensors/sensor_bridge.cpp
 
 	DEPENDS
 		px4_uavcan_dsdlc

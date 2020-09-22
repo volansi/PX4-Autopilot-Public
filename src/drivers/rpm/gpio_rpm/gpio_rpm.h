@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2014-2020 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2019 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,77 +31,55 @@
  *
  ****************************************************************************/
 
-/**
- * UAVCAN Node ID.
- *
- * Read the specs at http://uavcan.org to learn more about Node ID.
- *
- * @min 1
- * @max 125
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_NODE_ID, 120);
+#include <drivers/drv_hrt.h>
 
-/**
- * UAVCAN CAN bus bitrate.
- *
- * @min 20000
- * @max 1000000
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_BITRATE, 1000000);
+#include <parameters/param.h>
+#include <px4_platform_common/module.h>
+#include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 
-/**
- * UAVCANNODE ESC control enable.
- *
- * @reboot_required true
- *
- * @boolean
- * @group UAVCANNODE
- */
-PARAM_DEFINE_INT32(CANNODE_ESC_EN, 0);
+#include <uORB/uORB.h>
+#include <uORB/Publication.hpp>
+#include <uORB/topics/gpio_rpm.h>
+#include <uORB/topics/actuator_outputs.h>
 
-/**
- * Bitmask which sets the number of ESCs controlled by the cannode. Each
- * bit in the mask corresponds to one of the 8 actuator outputs.
- *
- * eg: cannode controls actuator 1,2,3,4 :: CANNODE_ESC_MASK = 15 (00001111)
- *
- * @min 0
- * @max 255
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_ESC_MASK, 15);
+using namespace time_literals;
 
+static constexpr int MAX_MOTORS = GPIO_INPUT_RPM_MAX_MOTORS;
+static constexpr uint64_t MOTOR_TIMEOUT_US =  500000; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
 
-/**
- * Integer which controls mapping of incoming actuator index to
- * the proper output channel.
- *
- * eg: if CANNODE_ESC0_MAP = 5 then RawCommand[0] ==> actuator_output[5]
- *
- * @min 0
- * @max 15
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_ESC0_MAP, 0);
-PARAM_DEFINE_INT32(CANNODE_ESC1_MAP, 1);
-PARAM_DEFINE_INT32(CANNODE_ESC2_MAP, 2);
-PARAM_DEFINE_INT32(CANNODE_ESC3_MAP, 3);
-PARAM_DEFINE_INT32(CANNODE_ESC4_MAP, 4);
-PARAM_DEFINE_INT32(CANNODE_ESC5_MAP, 5);
-PARAM_DEFINE_INT32(CANNODE_ESC6_MAP, 6);
-PARAM_DEFINE_INT32(CANNODE_ESC7_MAP, 7);
+class GpioRpm : public ModuleBase<GpioRpm>, public px4::ScheduledWorkItem
+{
+public:
+	GpioRpm();
+	void start();
 
-/**
- * Units associated with ADC measurement.
- * 0 - unused
- * 1 - mV
- * 2 - mA
- * 3 - cK
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(ADC1_UNIT_TYPE, 1);
-PARAM_DEFINE_INT32(ADC2_UNIT_TYPE, 2);
-PARAM_DEFINE_INT32(ADC3_UNIT_TYPE, 0);
-PARAM_DEFINE_INT32(ADC4_UNIT_TYPE, 0);
+	static int isr_callback1(int irq, void *context, void *arg);
+	static int isr_callback2(int irq, void *context, void *arg);
+
+	static int custom_command(int argc, char *argv[]);
+	static int print_usage(const char *reason = nullptr);
+	static int task_spawn(int argc, char *argv[]);
+
+private:
+	void Run() override;
+	void isr_callback_handler(int motor_number);
+
+	void gpio_init(void);
+
+	struct MotorData
+	{
+		int rpm {};
+		int pulse_count {};
+		uint64_t start_time {};
+		bool timed_out {};
+	};
+
+	MotorData _motor_data_array[MAX_MOTORS] {};
+
+	int _pulses_per_revolution {};
+
+	uORB::PublicationData<gpio_rpm_s> _gpio_rpm_pub{ORB_ID(gpio_rpm)};
+
+	// TESTING: remove when done testing
+	uORB::PublicationData<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};
+};

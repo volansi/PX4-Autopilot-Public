@@ -81,6 +81,10 @@ UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &sys
 	_air_data_static_temperature_publisher(_node),
 	_raw_air_data_publisher(_node),
 	_range_sensor_measurement(_node),
+	_esc_status_publisher(_node),
+	_analog_measurement_publisher(_node),
+	_gpio_rpm_publisher(_node),
+	_uavcan_actuator_command_sub(_node),
 	_cycle_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle time")),
 	_interval_perf(perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")),
 	_reset_timer(_node)
@@ -252,6 +256,9 @@ void UavcanNode::cb_beginfirmware_update(const uavcan::ReceivedDataStructure<Uav
 
 int UavcanNode::init(uavcan::NodeID node_id, UAVCAN_DRIVER::BusEvent &bus_events)
 {
+	update_parameters();
+
+	// Fill node info
 	_node.setName(HW_UAVCAN_NAME);
 	_node.setNodeID(node_id);
 
@@ -266,7 +273,36 @@ int UavcanNode::init(uavcan::NodeID node_id, UAVCAN_DRIVER::BusEvent &bus_events
 
 	bus_events.registerSignalCallback(UavcanNode::busevent_signal_trampoline);
 
+
+	if (_cannode_esc_en) {
+		PX4_INFO("registering esc.RawCommand CB");
+		int res = _uavcan_actuator_command_sub.start(ArrayCommandCbBinder(this, &UavcanNode::actuator_command_sub_cb));
+
+		if (res < 0) {
+			PX4_ERR("ESC status sub failed %i", res);
+		}
+	}
+
 	return _node.start();
+}
+
+void UavcanNode::update_parameters()
+{
+	param_get(param_find("PWM_DISARMED"), &_pwm_disarmed);
+	param_get(param_find("CANNODE_ESC_EN"), &_cannode_esc_en);
+	param_get(param_find("CANNODE_ESC_MASK"), &_esc_mask);
+
+	// TODO: there's probably a more clever way to do this using string operations. Is it worth it?
+	param_get(param_find("CANNODE_ESC0_MAP"), &_esc_map[0]);
+	param_get(param_find("CANNODE_ESC1_MAP"), &_esc_map[1]);
+	param_get(param_find("CANNODE_ESC2_MAP"), &_esc_map[2]);
+	param_get(param_find("CANNODE_ESC3_MAP"), &_esc_map[3]);
+	param_get(param_find("CANNODE_ESC4_MAP"), &_esc_map[4]);
+	param_get(param_find("CANNODE_ESC5_MAP"), &_esc_map[5]);
+	param_get(param_find("CANNODE_ESC6_MAP"), &_esc_map[6]);
+	param_get(param_find("CANNODE_ESC7_MAP"), &_esc_map[7]);
+
+	// TODO: there could be problems if two incoming channels are mapped to the same output channel. How should we handle this?
 }
 
 // Restart handler
@@ -280,6 +316,55 @@ class RestartRequestHandler: public uavcan::IRestartRequestHandler
 		return true; // Will never be executed BTW
 	}
 } restart_request_handler;
+
+void UavcanNode::actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand> &cmd)
+{
+	actuator_outputs_s outputs = {};
+
+	outputs.noutputs = cmd.commands.size();
+
+	// If message is empty, the vehicle is disarmed
+	if (cmd.commands.size() == 0) {
+		for (size_t i = 0; i < sizeof(outputs.output) / sizeof(outputs.output[0]); i++) {
+			outputs.output[i] = _pwm_disarmed;
+		}
+	}
+
+	for (size_t i = 0; i < cmd.commands.size(); i++) {
+		// NOTE: the uavcan driver px4 FC side should publish an empty message if disarmed, this is
+		// not the case. Upon boot, the FC will publish empty messages, but after it's been armed/disarmed
+		// once, it will publish a message with zeroes for each output if disarmed.
+		if (static_cast<int>(cmd.commands.at(i).command_value) == 0) {
+			outputs.output[i] = _pwm_disarmed;
+
+		} else {
+			// 1:1 passthrough of actuator_outputs values
+			outputs.output[i] = static_cast<unsigned>(cmd.commands.at(i).command_value);
+		}
+	}
+
+	// Now remap the indices
+	remap_esc_indices(outputs);
+
+	_actuator_outputs_pub.publish(outputs);
+}
+
+void UavcanNode::remap_esc_indices(actuator_outputs_s& outputs)
+{
+	// Check to ensure parameters are within buffer size
+	for (size_t i = 0; i < (sizeof(_esc_map) / sizeof(_esc_map[0])); i++) {
+		if (_esc_map[i] > (int)(sizeof(outputs.output) / sizeof(outputs.output[0]))) {
+			PX4_ERR("ESC mapping is configured incorrectly!");
+			return;
+		}
+	}
+
+	// Do the remapping
+	actuator_outputs_s copy = outputs;
+	for (size_t i = 0; i < (sizeof(_esc_map) / sizeof(_esc_map[0])); i++) {
+		outputs.output[_esc_map[i]] = copy.output[i];
+	}
+}
 
 void UavcanNode::Run()
 {
@@ -299,12 +384,15 @@ void UavcanNode::Run()
 
 		_node.setModeOperational();
 
+		_analog_report_sub.registerCallback();
+		_battery_status_sub.registerCallback();
 		_diff_pressure_sub.registerCallback();
 
 		for (auto &dist : _distance_sensor_sub) {
 			dist.registerCallback();
 		}
 
+		_gpio_rpm_sub.registerCallback();
 		_sensor_baro_sub.registerCallback();
 		_sensor_mag_sub.registerCallback();
 		_vehicle_gps_position_sub.registerCallback();
@@ -321,18 +409,68 @@ void UavcanNode::Run()
 		parameter_update_s pupdate;
 		_parameter_update_sub.copy(&pupdate);
 
-		// update parameters from storage
+		update_parameters();
 	}
 
+	// Calls subscription callbacks here
 	const int spin_res = _node.spin(uavcan::MonotonicTime());
 
 	if (spin_res < 0) {
 		PX4_ERR("node spin error %i", spin_res);
 	}
 
+	// Send uavcan messages with data from the system
+	send_analog_measurements();
+	send_battery_info();
+	send_esc_status();
+	send_gnss_fix2();
+	send_gpio_rpm_measurements();
+	send_magnetic_field_strength2();
+	send_raw_air_data();
+	send_static_pressure();
+
+	perf_end(_cycle_perf);
+
+	pthread_mutex_unlock(&_node_mutex);
+
+	if (_task_should_exit.load()) {
+		ScheduleClear();
+		_instance = nullptr;
+	}
+}
+
+void UavcanNode::send_esc_status()
+{
+	// Check the CANNODE_ESC_MASK and only report status of ESCs we use
+	if (_cannode_esc_en) {
+
+		if (hrt_elapsed_time(&_last_esc_status_publish) > 100_ms) {
+			// TODO: the only status information we have is potentially RPM measurements from up to .. 4 .. ESCs (arbitrary number).
+
+			// TODO: FIXME: we publish status information for up to CONNECTED_ESC_MAX ESCs, but we only allow 4 RPM measurements
+			for (size_t i = 0; i < esc_status_s::CONNECTED_ESC_MAX; i++) {
+				if (_esc_mask & 1 << i) {
+					uavcan::equipment::esc::Status esc_status{};
+					esc_status.esc_index = i;
+
+					// _gpio_rpm is updated in send_gpio_rpm_measurements()
+					if (i < GPIO_INPUT_RPM_MAX_MOTORS) {
+						esc_status.rpm = _gpio_rpm.rpm[i];
+					}
+					_esc_status_publisher.broadcast(esc_status);
+				}
+			}
+
+			_last_esc_status_publish = hrt_absolute_time();
+		}
+	}
+}
+
+void UavcanNode::send_battery_info()
+{
 	// battery_status -> uavcan::equipment::power::BatteryInfo
 	if (_battery_status_sub.updated()) {
-		battery_status_s battery;
+		battery_status_s battery{};
 
 		if (_battery_status_sub.copy(&battery)) {
 			uavcan::equipment::power::BatteryInfo battery_info{};
@@ -359,10 +497,13 @@ void UavcanNode::Run()
 			_power_battery_info_publisher.broadcast(battery_info);
 		}
 	}
+}
 
+void UavcanNode::send_raw_air_data()
+{
 	// differential_pressure -> uavcan::equipment::air_data::RawAirData
 	if (_diff_pressure_sub.updated()) {
-		differential_pressure_s diff_press;
+		differential_pressure_s diff_press{};
 
 		if (_diff_pressure_sub.copy(&diff_press)) {
 
@@ -378,7 +519,10 @@ void UavcanNode::Run()
 			_raw_air_data_publisher.broadcast(raw_air_data);
 		}
 	}
+}
 
+void UavcanNode::send_range_sensor_measurement()
+{
 	// distance_sensor[] -> uavcan::equipment::range_sensor::Measurement
 	for (int i = 0; i < MAX_INSTANCES; i++) {
 		distance_sensor_s dist;
@@ -427,10 +571,13 @@ void UavcanNode::Run()
 			_range_sensor_measurement.broadcast(range_sensor);
 		}
 	}
+}
 
+void UavcanNode::send_static_pressure()
+{
 	// sensor_baro -> uavcan::equipment::air_data::StaticTemperature
 	if (_sensor_baro_sub.updated()) {
-		sensor_baro_s baro;
+		sensor_baro_s baro{};
 
 		if (_sensor_baro_sub.copy(&baro)) {
 			uavcan::equipment::air_data::StaticPressure static_pressure{};
@@ -445,10 +592,13 @@ void UavcanNode::Run()
 			}
 		}
 	}
+}
 
+void UavcanNode::send_magnetic_field_strength2()
+{
 	// sensor_mag -> uavcan::equipment::ahrs::MagneticFieldStrength2
 	if (_sensor_mag_sub.updated()) {
-		sensor_mag_s mag;
+		sensor_mag_s mag{};
 
 		if (_sensor_mag_sub.copy(&mag)) {
 			uavcan::equipment::ahrs::MagneticFieldStrength2 magnetic_field{};
@@ -459,10 +609,13 @@ void UavcanNode::Run()
 			_ahrs_magnetic_field_strength2_publisher.broadcast(magnetic_field);
 		}
 	}
+}
 
+void UavcanNode::send_gnss_fix2()
+{
 	// vehicle_gps_position -> uavcan::equipment::gnss::Fix2
 	if (_vehicle_gps_position_sub.updated()) {
-		vehicle_gps_position_s gps;
+		vehicle_gps_position_s gps{};
 
 		if (_vehicle_gps_position_sub.copy(&gps)) {
 			uavcan::equipment::gnss::Fix2 fix2{};
@@ -494,14 +647,42 @@ void UavcanNode::Run()
 			_gnss_fix2_publisher.broadcast(fix2);
 		}
 	}
+}
 
-	perf_end(_cycle_perf);
+void UavcanNode::send_analog_measurements()
+{
+	// vehicle_gps_position -> uavcan::equipment::gnss::Fix2
+	if (_analog_report_sub.updated()) {
+		analog_measurement_s measurement{};
 
-	pthread_mutex_unlock(&_node_mutex);
+		if (_analog_report_sub.copy(&measurement)) {
 
-	if (_task_should_exit.load()) {
-		ScheduleClear();
-		_instance = nullptr;
+			com::volansi::equipment::adc::AnalogMeasurement report{};
+
+			for (size_t i = 0; i < sizeof(measurement.values)/sizeof(measurement.values[0]); i++) {
+				if (measurement.unit_type[i]) {
+					report.unit_type[i] = measurement.unit_type[i];
+					report.values[i] = measurement.values[i];
+				}
+			}
+
+			_analog_measurement_publisher.broadcast(report);
+		}
+	}
+}
+
+void UavcanNode::send_gpio_rpm_measurements()
+{
+	if (_gpio_rpm_sub.updated()) {
+		_gpio_rpm_sub.copy(&_gpio_rpm);
+
+		com::volansi::equipment::gpio::Rpm report{};
+		// Publish generic RPM
+		for (size_t i = 0; i < GPIO_INPUT_RPM_MAX_MOTORS; i++) {
+			report.rpm[i] = _gpio_rpm.rpm[i];
+		}
+
+		_gpio_rpm_publisher.broadcast(report);
 	}
 }
 
@@ -563,8 +744,6 @@ static void print_usage()
 
 extern "C" int uavcannode_start(int argc, char *argv[])
 {
-	//board_app_initialize(nullptr);
-
 	// CAN bitrate
 	int32_t bitrate = 0;
 

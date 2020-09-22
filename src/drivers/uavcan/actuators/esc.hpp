@@ -47,18 +47,23 @@
 #include <uavcan/uavcan.hpp>
 #include <uavcan/equipment/esc/RawCommand.hpp>
 #include <uavcan/equipment/esc/Status.hpp>
-#include <lib/perf/perf_counter.h>
+#include <uavcan/equipment/actuator/ArrayCommand.hpp>
+
 #include <uORB/PublicationMulti.hpp>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/esc_status.h>
+
 #include <drivers/drv_hrt.h>
+
 #include <lib/mixer_module/mixer_module.hpp>
+#include <lib/parameters/param.h>
+#include <lib/perf/perf_counter.h>
+
 
 class UavcanEscController
 {
 public:
 	static constexpr int MAX_ACTUATORS = MixingOutput::MAX_ACTUATORS;
-	static constexpr unsigned MAX_RATE_HZ = 200;			///< XXX make this configurable
 	static constexpr uint16_t DISARMED_OUTPUT_VALUE = UINT16_MAX;
 
 	UavcanEscController(uavcan::INode &node);
@@ -111,7 +116,8 @@ private:
 	 */
 	uavcan::MonotonicTime							_prev_cmd_pub;   ///< rate limiting
 	uavcan::INode								&_node;
-	uavcan::Publisher<uavcan::equipment::esc::RawCommand>			_uavcan_pub_raw_cmd;
+	uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand>	_uavcan_pub_actuator;
+
 	uavcan::Subscriber<uavcan::equipment::esc::Status, StatusCbBinder>	_uavcan_sub_status;
 	uavcan::TimerEventForwarder<TimerCbBinder>				_orb_timer;
 
@@ -119,4 +125,6 @@ private:
 	 * ESC states
 	 */
 	uint8_t				_max_number_of_nonzero_outputs{0};
+
+	int 				_esc_update_rate{0};
 };

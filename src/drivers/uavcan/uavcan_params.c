@@ -105,3 +105,13 @@ PARAM_DEFINE_FLOAT(UAVCAN_RNG_MIN, 0.3f);
  * @group UAVCAN
  */
 PARAM_DEFINE_FLOAT(UAVCAN_RNG_MAX, 200.0f);
+
+/**
+
+ * UAVCAN ESC update rate. Reducing this value will reduce CAN bus congestion, but increase latency.
+ *
+ * @unit Hz
+ * @reboot_required true
+ * @group UAVCAN
+ */
+PARAM_DEFINE_INT32(UAVCAN_ESC_RATE, 200);

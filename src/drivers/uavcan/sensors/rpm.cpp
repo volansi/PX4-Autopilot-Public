@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2014-2020 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2020 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,77 +31,46 @@
  *
  ****************************************************************************/
 
-/**
- * UAVCAN Node ID.
- *
- * Read the specs at http://uavcan.org to learn more about Node ID.
- *
- * @min 1
- * @max 125
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_NODE_ID, 120);
+#include <drivers/drv_hrt.h>
+#include "rpm.hpp"
 
-/**
- * UAVCAN CAN bus bitrate.
- *
- * @min 20000
- * @max 1000000
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_BITRATE, 1000000);
+const char *const UavcanRpmBridge::NAME = "rpm";
 
-/**
- * UAVCANNODE ESC control enable.
- *
- * @reboot_required true
- *
- * @boolean
- * @group UAVCANNODE
- */
-PARAM_DEFINE_INT32(CANNODE_ESC_EN, 0);
+UavcanRpmBridge::UavcanRpmBridge(uavcan::INode &node) :
+	UavcanCDevSensorBridgeBase("uavcan_airspeed", "/dev/uavcan/rpm", "/dev/rpm", ORB_ID(gpio_rpm)),
+	_sub_rpm_data(node)
+{ }
 
-/**
- * Bitmask which sets the number of ESCs controlled by the cannode. Each
- * bit in the mask corresponds to one of the 8 actuator outputs.
- *
- * eg: cannode controls actuator 1,2,3,4 :: CANNODE_ESC_MASK = 15 (00001111)
- *
- * @min 0
- * @max 255
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_ESC_MASK, 15);
+int UavcanRpmBridge::init()
+{
+	int res = device::CDev::init();
 
+	if (res < 0) {
+		return res;
+	}
 
-/**
- * Integer which controls mapping of incoming actuator index to
- * the proper output channel.
- *
- * eg: if CANNODE_ESC0_MAP = 5 then RawCommand[0] ==> actuator_output[5]
- *
- * @min 0
- * @max 15
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(CANNODE_ESC0_MAP, 0);
-PARAM_DEFINE_INT32(CANNODE_ESC1_MAP, 1);
-PARAM_DEFINE_INT32(CANNODE_ESC2_MAP, 2);
-PARAM_DEFINE_INT32(CANNODE_ESC3_MAP, 3);
-PARAM_DEFINE_INT32(CANNODE_ESC4_MAP, 4);
-PARAM_DEFINE_INT32(CANNODE_ESC5_MAP, 5);
-PARAM_DEFINE_INT32(CANNODE_ESC6_MAP, 6);
-PARAM_DEFINE_INT32(CANNODE_ESC7_MAP, 7);
+	res = _sub_rpm_data.start(RpmCbBinder(this, &UavcanRpmBridge::rpm_sub_cb));
 
-/**
- * Units associated with ADC measurement.
- * 0 - unused
- * 1 - mV
- * 2 - mA
- * 3 - cK
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(ADC1_UNIT_TYPE, 1);
-PARAM_DEFINE_INT32(ADC2_UNIT_TYPE, 2);
-PARAM_DEFINE_INT32(ADC3_UNIT_TYPE, 0);
-PARAM_DEFINE_INT32(ADC4_UNIT_TYPE, 0);
+	if (res < 0) {
+		DEVICE_LOG("failed to start uavcan sub: %d", res);
+		return res;
+	}
+
+	return 0;
+}
+
+void
+UavcanRpmBridge::rpm_sub_cb(const
+				 uavcan::ReceivedDataStructure<com::volansi::equipment::gpio::Rpm> &msg)
+{
+	gpio_rpm_s report{};
+
+	report.timestamp = hrt_absolute_time();
+
+	int numIndices = msg.rpm.size();
+	for (int i = 0; i < numIndices; i++) {
+		report.rpm[i] = msg.rpm[i];
+	}
+
+	publish(msg.getSrcNodeID().get(), &report);
+}

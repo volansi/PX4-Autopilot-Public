@@ -1,0 +1,7 @@
+uint3 UNITS_NONE = 0
+uint3 UNITS_MV 	 = 1
+uint3 UNITS_MA 	 = 2
+uint3 UNITS_CK 	 = 3
+uint3[4] unit_type
+
+int16[4] values
