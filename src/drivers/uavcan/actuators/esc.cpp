@@ -47,11 +47,11 @@ using namespace time_literals;
 
 UavcanEscController::UavcanEscController(uavcan::INode &node) :
 	_node(node),
-	_uavcan_pub_raw_cmd(node),
+	_uavcan_pub_actuator(node),
 	_uavcan_sub_status(node),
 	_orb_timer(node)
 {
-	_uavcan_pub_raw_cmd.setPriority(UAVCAN_COMMAND_TRANSFER_PRIORITY);
+	_uavcan_pub_actuator.setPriority(UAVCAN_COMMAND_TRANSFER_PRIORITY);
 }
 
 UavcanEscController::~UavcanEscController()
@@ -81,8 +81,8 @@ UavcanEscController::init()
 void
 UavcanEscController::update_outputs(bool stop_motors, uint16_t outputs[MAX_ACTUATORS], unsigned num_outputs)
 {
-	if (num_outputs > uavcan::equipment::esc::RawCommand::FieldTypes::cmd::MaxSize) {
-		num_outputs = uavcan::equipment::esc::RawCommand::FieldTypes::cmd::MaxSize;
+	if (num_outputs > uavcan::equipment::actuator::ArrayCommand::FieldTypes::commands::MaxSize) {
+		num_outputs = uavcan::equipment::actuator::ArrayCommand::FieldTypes::commands::MaxSize;
 	}
 
 	if (num_outputs > esc_status_s::CONNECTED_ESC_MAX) {
@@ -104,41 +104,26 @@ UavcanEscController::update_outputs(bool stop_motors, uint16_t outputs[MAX_ACTUA
 	 * Fill the command message
 	 * If unarmed, we publish an empty message anyway
 	 */
-	uavcan::equipment::esc::RawCommand msg;
+	uavcan::equipment::actuator::ArrayCommand msg;
 
 	for (unsigned i = 0; i < num_outputs; i++) {
 		if (stop_motors || outputs[i] == DISARMED_OUTPUT_VALUE) {
-			msg.cmd.push_back(static_cast<unsigned>(0));
+			uavcan::equipment::actuator::Command command;
+			command.command_type = uavcan::equipment::actuator::Command::COMMAND_TYPE_UNITLESS;
+			command.actuator_id = i; // TODO
+			command.command_value = static_cast<unsigned>(0);
+			msg.commands.push_back(command);
 
 		} else {
-			msg.cmd.push_back(static_cast<int>(outputs[i]));
+			uavcan::equipment::actuator::Command command;
+			command.command_type = uavcan::equipment::actuator::Command::COMMAND_TYPE_UNITLESS;
+			command.actuator_id = i; // TODO
+			command.command_value = static_cast<int>(outputs[i]);
+			msg.commands.push_back(command);
 		}
 	}
 
-	/*
-	 * Remove channels that are always zero.
-	 * The objective of this optimization is to avoid broadcasting multi-frame transfers when a single frame
-	 * transfer would be enough. This is a valid optimization as the UAVCAN specification implies that all
-	 * non-specified ESC setpoints should be considered zero.
-	 * The positive outcome is a (marginally) lower bus traffic and lower CPU load.
-	 *
-	 * From the standpoint of the PX4 architecture, however, this is a hack. It should be investigated why
-	 * the mixer returns more outputs than are actually used.
-	 */
-	for (int index = int(msg.cmd.size()) - 1; index >= _max_number_of_nonzero_outputs; index--) {
-		if (msg.cmd[index] != 0) {
-			_max_number_of_nonzero_outputs = index + 1;
-			break;
-		}
-	}
-
-	msg.cmd.resize(_max_number_of_nonzero_outputs);
-
-	/*
-	 * Publish the command message to the bus
-	 * Note that for a quadrotor it takes one CAN frame
-	 */
-	_uavcan_pub_raw_cmd.broadcast(msg);
+	_uavcan_pub_actuator.broadcast(msg);
 }
 
 void

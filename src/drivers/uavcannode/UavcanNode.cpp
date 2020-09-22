@@ -84,7 +84,7 @@ UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &sys
 	_esc_status_publisher(_node),
 	_analog_measurement_publisher(_node),
 	_gpio_rpm_publisher(_node),
-	_uavcan_esc_raw_command_sub(_node),
+	_uavcan_actuator_command_sub(_node),
 	_cycle_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle time")),
 	_interval_perf(perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")),
 	_reset_timer(_node)
@@ -276,7 +276,7 @@ int UavcanNode::init(uavcan::NodeID node_id, UAVCAN_DRIVER::BusEvent &bus_events
 
 	if (_cannode_esc_en) {
 		PX4_INFO("registering esc.RawCommand CB");
-		int res = _uavcan_esc_raw_command_sub.start(RawCommandCbBinder(this, &UavcanNode::esc_raw_command_sub_cb));
+		int res = _uavcan_actuator_command_sub.start(ArrayCommandCbBinder(this, &UavcanNode::actuator_command_sub_cb));
 
 		if (res < 0) {
 			PX4_ERR("ESC status sub failed %i", res);
@@ -288,8 +288,6 @@ int UavcanNode::init(uavcan::NodeID node_id, UAVCAN_DRIVER::BusEvent &bus_events
 
 void UavcanNode::update_parameters()
 {
-	param_get(param_find("PWM_MIN"), &_pwm_min);
-	param_get(param_find("PWM_MAX"), &_pwm_max);
 	param_get(param_find("PWM_DISARMED"), &_pwm_disarmed);
 	param_get(param_find("CANNODE_ESC_EN"), &_cannode_esc_en);
 	param_get(param_find("CANNODE_ESC_MASK"), &_esc_mask);
@@ -319,27 +317,29 @@ class RestartRequestHandler: public uavcan::IRestartRequestHandler
 	}
 } restart_request_handler;
 
-void UavcanNode::esc_raw_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::RawCommand> &cmd)
+void UavcanNode::actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand> &cmd)
 {
 	actuator_outputs_s outputs = {};
 
+	outputs.noutputs = cmd.commands.size();
+
 	// If message is empty, the vehicle is disarmed
-	if (cmd.cmd.size() == 0) {
+	if (cmd.commands.size() == 0) {
 		for (size_t i = 0; i < sizeof(outputs.output) / sizeof(outputs.output[0]); i++) {
 			outputs.output[i] = _pwm_disarmed;
 		}
 	}
 
-	for (size_t i = 0; i < cmd.cmd.size(); i++) {
+	for (size_t i = 0; i < cmd.commands.size(); i++) {
 		// NOTE: the uavcan driver px4 FC side should publish an empty message if disarmed, this is
 		// not the case. Upon boot, the FC will publish empty messages, but after it's been armed/disarmed
 		// once, it will publish a message with zeroes for each output if disarmed.
-		if (cmd.cmd.at(i) == 0) {
+		if (static_cast<int>(cmd.commands.at(i).command_value) == 0) {
 			outputs.output[i] = _pwm_disarmed;
 
 		} else {
-			// Scale from normalized -8192/+8192 to PWM_MIN / PWM_MAX
-			outputs.output[i] = _pwm_min + (static_cast<float>(cmd.cmd.at(i)) / 8192.0f) * (_pwm_max - _pwm_min);
+			// 1:1 passthrough of actuator_outputs values
+			outputs.output[i] = static_cast<unsigned>(cmd.commands.at(i).command_value);
 		}
 	}
 

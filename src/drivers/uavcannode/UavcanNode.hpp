@@ -58,7 +58,7 @@
 #include <uavcan/protocol/param/ExecuteOpcode.hpp>
 #include <uavcan/protocol/RestartNode.hpp>
 
-#include <uavcan/equipment/esc/RawCommand.hpp>
+#include <uavcan/equipment/actuator/ArrayCommand.hpp>
 #include <uavcan/equipment/esc/Status.hpp>
 #include <uavcan/equipment/ahrs/MagneticFieldStrength2.hpp>
 #include <uavcan/equipment/air_data/RawAirData.hpp>
@@ -176,8 +176,6 @@ private:
 
 	bool		_initialized{false};
 
-	int _pwm_min{1100}; // us
-	int _pwm_max{1950}; // us
 	int _pwm_disarmed{900}; // us
 	int _esc_mask{0};
 	int _cannode_esc_en{0};
@@ -204,11 +202,11 @@ private:
 				     uavcan::ServiceResponseDataStructure<UavcanNode::BeginFirmwareUpdate::Response> &rsp);
 
 	// Received messages callbacks
-	void esc_raw_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::RawCommand> &cmd);
+	void actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand> &cmd);
 
 	// Callback binders
 	typedef uavcan::MethodBinder<UavcanNode *,
-		void (UavcanNode::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::RawCommand>&)> RawCommandCbBinder;
+		void (UavcanNode::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand>&)> ArrayCommandCbBinder;
 
 
 	uavcan::Publisher<uavcan::equipment::ahrs::MagneticFieldStrength2> _ahrs_magnetic_field_strength2_publisher;
@@ -222,8 +220,7 @@ private:
 	uavcan::Publisher<com::volansi::equipment::adc::AnalogMeasurement> _analog_measurement_publisher;
 	uavcan::Publisher<com::volansi::equipment::gpio::Rpm> _gpio_rpm_publisher;
 
-
-	uavcan::Subscriber<uavcan::equipment::esc::RawCommand, RawCommandCbBinder>	_uavcan_esc_raw_command_sub;
+	uavcan::Subscriber<uavcan::equipment::actuator::ArrayCommand, ArrayCommandCbBinder>	_uavcan_actuator_command_sub;
 
 	hrt_abstime _last_esc_status_publish{0};
 	hrt_abstime _last_static_temperature_publish{0};

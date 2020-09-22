@@ -47,6 +47,7 @@
 #include <uavcan/uavcan.hpp>
 #include <uavcan/equipment/esc/RawCommand.hpp>
 #include <uavcan/equipment/esc/Status.hpp>
+#include <uavcan/equipment/actuator/ArrayCommand.hpp>
 
 #include <uORB/PublicationMulti.hpp>
 #include <uORB/topics/actuator_outputs.h>
@@ -115,7 +116,8 @@ private:
 	 */
 	uavcan::MonotonicTime							_prev_cmd_pub;   ///< rate limiting
 	uavcan::INode								&_node;
-	uavcan::Publisher<uavcan::equipment::esc::RawCommand>			_uavcan_pub_raw_cmd;
+	uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand>	_uavcan_pub_actuator;
+
 	uavcan::Subscriber<uavcan::equipment::esc::Status, StatusCbBinder>	_uavcan_sub_status;
 	uavcan::TimerEventForwarder<TimerCbBinder>				_orb_timer;
 
