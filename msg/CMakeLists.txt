@@ -41,6 +41,7 @@ set(msg_files
 	adc_report.msg
 	airspeed.msg
 	airspeed_validated.msg
+	analog_measurement.msg
 	battery_status.msg
 	camera_capture.msg
 	camera_trigger.msg
@@ -65,6 +66,7 @@ set(msg_files
 	estimator_status.msg
 	follow_target.msg
 	geofence_result.msg
+	gpio_rpm.msg
 	gps_dump.msg
 	gps_inject_data.msg
 	home_position.msg

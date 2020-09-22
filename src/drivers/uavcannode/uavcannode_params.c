@@ -50,3 +50,58 @@ PARAM_DEFINE_INT32(CANNODE_NODE_ID, 120);
  * @group UAVCAN
  */
 PARAM_DEFINE_INT32(CANNODE_BITRATE, 1000000);
+
+/**
+ * UAVCANNODE ESC control enable.
+ *
+ * @reboot_required true
+ *
+ * @boolean
+ * @group UAVCANNODE
+ */
+PARAM_DEFINE_INT32(CANNODE_ESC_EN, 0);
+
+/**
+ * Bitmask which sets the number of ESCs controlled by the cannode. Each
+ * bit in the mask corresponds to one of the 8 actuator outputs.
+ *
+ * eg: cannode controls actuator 1,2,3,4 :: CANNODE_ESC_MASK = 15 (00001111)
+ *
+ * @min 0
+ * @max 255
+ * @group UAVCAN
+ */
+PARAM_DEFINE_INT32(CANNODE_ESC_MASK, 15);
+
+
+/**
+ * Integer which controls mapping of incoming actuator index to
+ * the proper output channel.
+ *
+ * eg: if CANNODE_ESC0_MAP = 5 then RawCommand[0] ==> actuator_output[5]
+ *
+ * @min 0
+ * @max 15
+ * @group UAVCAN
+ */
+PARAM_DEFINE_INT32(CANNODE_ESC0_MAP, 0);
+PARAM_DEFINE_INT32(CANNODE_ESC1_MAP, 1);
+PARAM_DEFINE_INT32(CANNODE_ESC2_MAP, 2);
+PARAM_DEFINE_INT32(CANNODE_ESC3_MAP, 3);
+PARAM_DEFINE_INT32(CANNODE_ESC4_MAP, 4);
+PARAM_DEFINE_INT32(CANNODE_ESC5_MAP, 5);
+PARAM_DEFINE_INT32(CANNODE_ESC6_MAP, 6);
+PARAM_DEFINE_INT32(CANNODE_ESC7_MAP, 7);
+
+/**
+ * Units associated with ADC measurement.
+ * 0 - unused
+ * 1 - mV
+ * 2 - mA
+ * 3 - cK
+ * @group UAVCAN
+ */
+PARAM_DEFINE_INT32(ADC1_UNIT_TYPE, 1);
+PARAM_DEFINE_INT32(ADC2_UNIT_TYPE, 2);
+PARAM_DEFINE_INT32(ADC3_UNIT_TYPE, 0);
+PARAM_DEFINE_INT32(ADC4_UNIT_TYPE, 0);

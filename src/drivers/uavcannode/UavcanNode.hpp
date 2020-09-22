@@ -57,6 +57,9 @@
 #include <uavcan/protocol/param/GetSet.hpp>
 #include <uavcan/protocol/param/ExecuteOpcode.hpp>
 #include <uavcan/protocol/RestartNode.hpp>
+
+#include <uavcan/equipment/actuator/ArrayCommand.hpp>
+#include <uavcan/equipment/esc/Status.hpp>
 #include <uavcan/equipment/ahrs/MagneticFieldStrength2.hpp>
 #include <uavcan/equipment/air_data/RawAirData.hpp>
 #include <uavcan/equipment/air_data/StaticPressure.hpp>
@@ -64,20 +67,29 @@
 #include <uavcan/equipment/gnss/Fix2.hpp>
 #include <uavcan/equipment/power/BatteryInfo.hpp>
 #include <uavcan/equipment/range_sensor/Measurement.hpp>
-
+#include <com/volansi/equipment/adc/AnalogMeasurement.hpp>
+#include <com/volansi/equipment/gpio/Rpm.hpp>
 
 #include <lib/parameters/param.h>
 #include <lib/perf/perf_counter.h>
 
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
+
+#include <uORB/PublicationMulti.hpp>
+
+#include <uORB/topics/actuator_outputs.h>
+#include <uORB/topics/analog_measurement.h>
 #include <uORB/topics/battery_status.h>
-#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/differential_pressure.h>
 #include <uORB/topics/distance_sensor.h>
+#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/sensor_baro.h>
 #include <uORB/topics/sensor_mag.h>
 #include <uORB/topics/vehicle_gps_position.h>
+#include <uORB/topics/gpio_rpm.h>
+#include <uORB/topics/esc_status.h>
+
 
 /**
  * A UAVCAN node.
@@ -100,7 +112,7 @@ class UavcanNode : public px4::ScheduledWorkItem
 	static constexpr unsigned FramePerSecond   = MaxBitRatePerSec / bitPerFrame;
 	static constexpr unsigned FramePerMSecond  = ((FramePerSecond / 1000) + 1);
 
-	static constexpr unsigned ScheduleIntervalMs = 10;
+	static constexpr unsigned ScheduleIntervalMs = 1;
 
 	/*
 	 * This memory is reserved for uavcan to use for queuing CAN frames.
@@ -143,12 +155,33 @@ public:
 protected:
 	void Run() override;
 private:
-	void		fill_node_info();
-	int		init(uavcan::NodeID node_id, UAVCAN_DRIVER::BusEvent &bus_events);
+	int	init(uavcan::NodeID node_id, UAVCAN_DRIVER::BusEvent &bus_events);
+
+	void update_parameters();
+	void fill_node_info();
+
+	void send_analog_measurements();
+	void send_esc_status();
+	void send_battery_info();
+	void send_raw_air_data();
+	void send_static_pressure();
+	void send_magnetic_field_strength2();
+	void send_gnss_fix2();
+	void send_range_sensor_measurement();
+	void send_gpio_rpm_measurements();
+
+	void remap_esc_indices(actuator_outputs_s& outputs);
 
 	px4::atomic_bool	_task_should_exit{false};	///< flag to indicate to tear down the CAN driver
 
-	bool		_initialized{false};		///< number of actuators currently available
+	bool		_initialized{false};
+
+	int _pwm_disarmed{900}; // us
+	int _esc_mask{0};
+	int _cannode_esc_en{0};
+
+	// assumes 8 pwm outputs
+	int _esc_map[8];
 
 	static UavcanNode	*_instance;			///< singleton pointer
 
@@ -168,6 +201,13 @@ private:
 	void cb_beginfirmware_update(const uavcan::ReceivedDataStructure<UavcanNode::BeginFirmwareUpdate::Request> &req,
 				     uavcan::ServiceResponseDataStructure<UavcanNode::BeginFirmwareUpdate::Response> &rsp);
 
+	// Received messages callbacks
+	void actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand> &cmd);
+
+	// Callback binders
+	typedef uavcan::MethodBinder<UavcanNode *,
+		void (UavcanNode::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand>&)> ArrayCommandCbBinder;
+
 
 	uavcan::Publisher<uavcan::equipment::ahrs::MagneticFieldStrength2> _ahrs_magnetic_field_strength2_publisher;
 	uavcan::Publisher<uavcan::equipment::gnss::Fix2> _gnss_fix2_publisher;
@@ -176,7 +216,13 @@ private:
 	uavcan::Publisher<uavcan::equipment::air_data::StaticTemperature> _air_data_static_temperature_publisher;
 	uavcan::Publisher<uavcan::equipment::air_data::RawAirData> _raw_air_data_publisher;
 	uavcan::Publisher<uavcan::equipment::range_sensor::Measurement> _range_sensor_measurement;
+	uavcan::Publisher<uavcan::equipment::esc::Status> _esc_status_publisher;
+	uavcan::Publisher<com::volansi::equipment::adc::AnalogMeasurement> _analog_measurement_publisher;
+	uavcan::Publisher<com::volansi::equipment::gpio::Rpm> _gpio_rpm_publisher;
 
+	uavcan::Subscriber<uavcan::equipment::actuator::ArrayCommand, ArrayCommandCbBinder>	_uavcan_actuator_command_sub;
+
+	hrt_abstime _last_esc_status_publish{0};
 	hrt_abstime _last_static_temperature_publish{0};
 
 	uORB::Subscription _parameter_update_sub{ORB_ID(parameter_update)};
@@ -192,6 +238,13 @@ private:
 	uORB::SubscriptionCallbackWorkItem _sensor_baro_sub{this, ORB_ID(sensor_baro)};
 	uORB::SubscriptionCallbackWorkItem _sensor_mag_sub{this, ORB_ID(sensor_mag)};
 	uORB::SubscriptionCallbackWorkItem _vehicle_gps_position_sub{this, ORB_ID(vehicle_gps_position)};
+	uORB::SubscriptionCallbackWorkItem _analog_report_sub{this, ORB_ID(analog_measurement)};
+
+	uORB::SubscriptionCallbackWorkItem _gpio_rpm_sub {this, ORB_ID(gpio_rpm)};
+
+	uORB::PublicationMulti<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};
+
+	gpio_rpm_s _gpio_rpm;
 
 	perf_counter_t _cycle_perf;
 	perf_counter_t _interval_perf;

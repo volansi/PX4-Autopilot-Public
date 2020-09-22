@@ -104,3 +104,18 @@ then
 fi
 
 uavcannode start
+
+if param compare CANNODE_ESC_EN 1
+then
+	# Driver which subscribes to actuator_outputs uORB message and controls the PWM outputs.
+	# UAVCAN esc messages effectively drive this module to control the ESCs.
+	pwm_out_cannode start
+fi
+
+# Background module that converts ADC measurements into scaled analog measurements
+# of a predefined unit type. This AnalogMeasurement data is published over UAVCAN.
+analog_measurement start
+
+# Driver that can measure RPM of a motor as GPIO input rising edge pulses on
+# FMU channels 5 and 6
+gpio_rpm start

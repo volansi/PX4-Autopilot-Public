@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2014-2017 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2019 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,67 +31,55 @@
  *
  ****************************************************************************/
 
-/**
- * @author Pavel Kirienko <pavel.kirienko@gmail.com>
- */
+#include <drivers/drv_hrt.h>
 
-/**
- * UAVCAN mode
- *
- *  0 - UAVCAN disabled.
- *  1 - Enables support for UAVCAN sensors without dynamic node ID allocation and firmware update.
- *  2 - Enables support for UAVCAN sensors with dynamic node ID allocation and firmware update.
- *  3 - Enables support for UAVCAN sensors and actuators with dynamic node ID allocation and firmware update. Also sets the motor control outputs to UAVCAN.
- *
- * @min 0
- * @max 3
- * @value 0 Disabled
- * @value 1 Sensors Manual Config
- * @value 2 Sensors Automatic Config
- * @value 3 Sensors and Actuators (ESCs) Automatic Config
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_ENABLE, 0);
+#include <parameters/param.h>
+#include <px4_platform_common/module.h>
+#include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 
-/**
- * UAVCAN Node ID.
- *
- * Read the specs at http://uavcan.org to learn more about Node ID.
- *
- * @min 1
- * @max 125
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_NODE_ID, 1);
+#include <uORB/uORB.h>
+#include <uORB/Publication.hpp>
+#include <uORB/topics/gpio_rpm.h>
+#include <uORB/topics/actuator_outputs.h>
 
-/**
- * UAVCAN CAN bus bitrate.
- *
- * @unit bit/s
- * @min 20000
- * @max 1000000
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_BITRATE, 1000000);
+using namespace time_literals;
 
-/**
- * UAVCAN ESC will spin at idle throttle when armed, even if the mixer outputs zero setpoints.
- *
- * @boolean
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_ESC_IDLT, 1);
+static constexpr int MAX_MOTORS = GPIO_INPUT_RPM_MAX_MOTORS;
+static constexpr uint64_t MOTOR_TIMEOUT_US =  500000; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
 
-/**
- * UAVCAN ESC update rate. Reducing this value will reduce CAN bus congestion, but increase latency.
- *
- * @unit Hz
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_ESC_RATE, 200);
+class GpioRpm : public ModuleBase<GpioRpm>, public px4::ScheduledWorkItem
+{
+public:
+	GpioRpm();
+	void start();
 
+	static int isr_callback1(int irq, void *context, void *arg);
+	static int isr_callback2(int irq, void *context, void *arg);
+
+	static int custom_command(int argc, char *argv[]);
+	static int print_usage(const char *reason = nullptr);
+	static int task_spawn(int argc, char *argv[]);
+
+private:
+	void Run() override;
+	void isr_callback_handler(int motor_number);
+
+	void gpio_init(void);
+
+	struct MotorData
+	{
+		int rpm {};
+		int pulse_count {};
+		uint64_t start_time {};
+		bool timed_out {};
+	};
+
+	MotorData _motor_data_array[MAX_MOTORS] {};
+
+	int _pulses_per_revolution {};
+
+	uORB::PublicationData<gpio_rpm_s> _gpio_rpm_pub{ORB_ID(gpio_rpm)};
+
+	// TESTING: remove when done testing
+	uORB::PublicationData<actuator_outputs_s> _actuator_outputs_pub{ORB_ID(actuator_outputs)};
+};

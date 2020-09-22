@@ -38,6 +38,7 @@ px4_add_board(
 		bootloaders
 		#differential_pressure # all available differential pressure drivers
 		distance_sensor # all available distance sensor drivers
+		rpm/gpio_rpm
 		#dshot
 		gps
 		#imu # all available imu drivers
@@ -51,11 +52,12 @@ px4_add_board(
 		#lights/rgbled_ncp5623c
 		#magnetometer # all available magnetometer drivers
 		#optical_flow # all available optical flow drivers
-		#pwm_out
+		pwm_out_cannode
 		#safety_button
 		#tone_alarm
 		uavcannode
 	MODULES
+		analog_measurement
 		#ekf2
 		#load_mon
 		sensors
@@ -81,7 +83,7 @@ px4_add_board(
 		#sd_bench
 		#shutdown
 		top
-		#topic_listener
+		topic_listener
 		#tune_control
 		ver
 		work_queue

@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2014-2017 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2020 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,66 +32,35 @@
  ****************************************************************************/
 
 /**
- * @author Pavel Kirienko <pavel.kirienko@gmail.com>
+ * @author RJ Gritter <rjgritter657@gmail.com>
  */
 
-/**
- * UAVCAN mode
- *
- *  0 - UAVCAN disabled.
- *  1 - Enables support for UAVCAN sensors without dynamic node ID allocation and firmware update.
- *  2 - Enables support for UAVCAN sensors with dynamic node ID allocation and firmware update.
- *  3 - Enables support for UAVCAN sensors and actuators with dynamic node ID allocation and firmware update. Also sets the motor control outputs to UAVCAN.
- *
- * @min 0
- * @max 3
- * @value 0 Disabled
- * @value 1 Sensors Manual Config
- * @value 2 Sensors Automatic Config
- * @value 3 Sensors and Actuators (ESCs) Automatic Config
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_ENABLE, 0);
+#pragma once
 
-/**
- * UAVCAN Node ID.
- *
- * Read the specs at http://uavcan.org to learn more about Node ID.
- *
- * @min 1
- * @max 125
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_NODE_ID, 1);
+#include "sensor_bridge.hpp"
+#include <uORB/topics/gpio_rpm.h>
 
-/**
- * UAVCAN CAN bus bitrate.
- *
- * @unit bit/s
- * @min 20000
- * @max 1000000
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_BITRATE, 1000000);
+#include <com/volansi/equipment/gpio/Rpm.hpp>
 
-/**
- * UAVCAN ESC will spin at idle throttle when armed, even if the mixer outputs zero setpoints.
- *
- * @boolean
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_ESC_IDLT, 1);
+class UavcanRpmBridge : public UavcanCDevSensorBridgeBase
+{
+public:
+	static const char *const NAME;
 
-/**
- * UAVCAN ESC update rate. Reducing this value will reduce CAN bus congestion, but increase latency.
- *
- * @unit Hz
- * @reboot_required true
- * @group UAVCAN
- */
-PARAM_DEFINE_INT32(UAVCAN_ESC_RATE, 200);
+	UavcanRpmBridge(uavcan::INode &node);
 
+	const char *get_name() const override { return NAME; }
+
+	int init() override;
+
+private:
+
+	void rpm_sub_cb(const uavcan::ReceivedDataStructure<com::volansi::equipment::gpio::Rpm> &msg);
+
+	typedef uavcan::MethodBinder < UavcanRpmBridge *,
+		void (UavcanRpmBridge::*)
+		(const uavcan::ReceivedDataStructure<com::volansi::equipment::gpio::Rpm> &) >
+		RpmCbBinder;
+
+	uavcan::Subscriber<com::volansi::equipment::gpio::Rpm, RpmCbBinder> _sub_rpm_data;
+};
