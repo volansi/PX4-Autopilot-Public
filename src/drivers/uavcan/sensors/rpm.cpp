@@ -65,6 +65,8 @@ UavcanRpmBridge::rpm_sub_cb(const
 {
 	gpio_rpm_s report{};
 
+	report.timestamp = hrt_absolute_time();
+
 	int numIndices = msg.rpm.size();
 	for (int i = 0; i < numIndices; i++) {
 		report.rpm[i] = msg.rpm[i];
