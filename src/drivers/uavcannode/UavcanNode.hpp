@@ -170,7 +170,7 @@ private:
 	void send_range_sensor_measurement();
 	void send_gpio_rpm_measurements();
 
-	void remap_esc_indices(actuator_outputs_s& outputs);
+	void remap_esc_indices(actuator_outputs_s &outputs);
 
 	px4::atomic_bool	_task_should_exit{false};	///< flag to indicate to tear down the CAN driver
 
@@ -206,7 +206,8 @@ private:
 
 	// Callback binders
 	typedef uavcan::MethodBinder<UavcanNode *,
-		void (UavcanNode::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand>&)> ArrayCommandCbBinder;
+		void (UavcanNode::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand>&)>
+		ArrayCommandCbBinder;
 
 
 	uavcan::Publisher<uavcan::equipment::ahrs::MagneticFieldStrength2> _ahrs_magnetic_field_strength2_publisher;

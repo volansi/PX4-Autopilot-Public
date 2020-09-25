@@ -45,7 +45,8 @@
 using namespace time_literals;
 
 static constexpr int MAX_MOTORS = GPIO_INPUT_RPM_MAX_MOTORS;
-static constexpr uint64_t MOTOR_TIMEOUT_US =  500000; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
+static constexpr uint64_t MOTOR_TIMEOUT_US =
+	500000; // If a full revolution does not occur within this time period, the motor is flagged as "timed_out"
 
 class GpioRpm : public ModuleBase<GpioRpm>, public px4::ScheduledWorkItem
 {
@@ -66,8 +67,7 @@ private:
 
 	void gpio_init(void);
 
-	struct MotorData
-	{
+	struct MotorData {
 		int rpm {};
 		int pulse_count {};
 		uint64_t start_time {};

@@ -317,7 +317,8 @@ class RestartRequestHandler: public uavcan::IRestartRequestHandler
 	}
 } restart_request_handler;
 
-void UavcanNode::actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand> &cmd)
+void UavcanNode::actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand>
+		&cmd)
 {
 	actuator_outputs_s outputs = {};
 
@@ -349,7 +350,7 @@ void UavcanNode::actuator_command_sub_cb(const uavcan::ReceivedDataStructure<uav
 	_actuator_outputs_pub.publish(outputs);
 }
 
-void UavcanNode::remap_esc_indices(actuator_outputs_s& outputs)
+void UavcanNode::remap_esc_indices(actuator_outputs_s &outputs)
 {
 	// Check to ensure parameters are within buffer size
 	for (size_t i = 0; i < (sizeof(_esc_map) / sizeof(_esc_map[0])); i++) {
@@ -361,6 +362,7 @@ void UavcanNode::remap_esc_indices(actuator_outputs_s& outputs)
 
 	// Do the remapping
 	actuator_outputs_s copy = outputs;
+
 	for (size_t i = 0; i < (sizeof(_esc_map) / sizeof(_esc_map[0])); i++) {
 		outputs.output[_esc_map[i]] = copy.output[i];
 	}
@@ -427,6 +429,7 @@ void UavcanNode::Run()
 	send_gpio_rpm_measurements();
 	send_magnetic_field_strength2();
 	send_raw_air_data();
+	send_range_sensor_measurement();
 	send_static_pressure();
 
 	perf_end(_cycle_perf);
@@ -457,6 +460,7 @@ void UavcanNode::send_esc_status()
 					if (i < GPIO_INPUT_RPM_MAX_MOTORS) {
 						esc_status.rpm = _gpio_rpm.rpm[i];
 					}
+
 					_esc_status_publisher.broadcast(esc_status);
 				}
 			}
@@ -659,7 +663,7 @@ void UavcanNode::send_analog_measurements()
 
 			com::volansi::equipment::adc::AnalogMeasurement report{};
 
-			for (size_t i = 0; i < sizeof(measurement.values)/sizeof(measurement.values[0]); i++) {
+			for (size_t i = 0; i < sizeof(measurement.values) / sizeof(measurement.values[0]); i++) {
 				if (measurement.unit_type[i]) {
 					report.unit_type[i] = measurement.unit_type[i];
 					report.values[i] = measurement.values[i];
@@ -677,6 +681,7 @@ void UavcanNode::send_gpio_rpm_measurements()
 		_gpio_rpm_sub.copy(&_gpio_rpm);
 
 		com::volansi::equipment::gpio::Rpm report{};
+
 		// Publish generic RPM
 		for (size_t i = 0; i < GPIO_INPUT_RPM_MAX_MOTORS; i++) {
 			report.rpm[i] = _gpio_rpm.rpm[i];
