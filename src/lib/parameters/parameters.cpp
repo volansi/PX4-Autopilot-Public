@@ -560,6 +560,27 @@ param_get_value_ptr(param_t param)
 	return result;
 }
 
+/**
+ * Obtain a pointer to the storage allocated for the default value of a parameter.
+ *
+ * @param param			The parameter whose storage is sought.
+ * @return			A pointer to the parameter default value, or
+ *				nullptr if the parameter does not exist.
+ */
+static const void *
+param_get_default_value_ptr(param_t param)
+{
+	const void *result = nullptr;
+
+	param_assert_locked();
+
+	if (handle_in_range(param)) {
+		result = &param_info_base[param].val;
+	}
+
+	return result;
+}
+
 int
 param_get(param_t param, void *val)
 {
@@ -569,6 +590,27 @@ param_get(param_t param, void *val)
 	if (val) {
 		param_lock_reader();
 		const void *v = param_get_value_ptr(param);
+
+		if (v) {
+			memcpy(val, v, param_size(param));
+			result = 0;
+		}
+
+		param_unlock_reader();
+	}
+
+	return result;
+}
+
+int
+param_get_default(param_t param, void *val)
+{
+	perf_count(param_get_perf);
+	int result = -1;
+
+	if (val) {
+		param_lock_reader();
+		const void *v = param_get_default_value_ptr(param);
 
 		if (v) {
 			memcpy(val, v, param_size(param));
