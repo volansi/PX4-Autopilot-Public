@@ -65,24 +65,33 @@ int PWMOut::init()
 		return ret;
 	}
 
+	// Getting initial parameter values
+	update_params();
+
 	// XXX best would be to register / de-register the device depending on modes
 
-	/* try to claim the generic PWM output device node as well - it's OK if we fail at this */
-	_class_instance = register_class_devname(PWM_OUTPUT_BASE_DEVICE_PATH);
+	if (_p_pwm_aux_mode.get() == 0) {
+		// Legacy mixer-module operation
+		_legacy_mixer_mode = true;
 
-	if (_class_instance == CLASS_DEVICE_PRIMARY) {
-		/* lets not be too verbose */
-	} else if (_class_instance < 0) {
-		PX4_ERR("FAILED registering class device");
+		/* try to claim the generic PWM output device node as well - it's OK if we fail at this */
+		_class_instance = register_class_devname(PWM_OUTPUT_BASE_DEVICE_PATH);
+
+		if (_class_instance == CLASS_DEVICE_PRIMARY) {
+			/* lets not be too verbose */
+		} else if (_class_instance < 0) {
+			PX4_ERR("FAILED registering class device");
+		}
+
+		_mixing_output.setDriverInstance(_class_instance);
+
+	} else {
+
+		_legacy_mixer_mode = false;
 	}
-
-	_mixing_output.setDriverInstance(_class_instance);
 
 	/* force a reset of the update rate */
 	_current_update_rate = 0;
-
-	// Getting initial parameter values
-	update_params();
 
 	ScheduleNow();
 
@@ -428,8 +437,21 @@ void PWMOut::update_current_rate()
 
 void PWMOut::update_pwm_rev_mask()
 {
-	uint16_t &reverse_pwm_mask = _mixing_output.reverseOutputMask();
-	reverse_pwm_mask = 0;
+	if (_legacy_mixer_mode) {
+
+		uint16_t &reverse_pwm_mask = _mixing_output.reverseOutputMask();
+		reverse_pwm_mask = get_pwm_rev_mask();
+
+	} else {
+
+		_reverse_pwm_mask = get_pwm_rev_mask();
+	}
+
+}
+
+uint16_t PWMOut::get_pwm_rev_mask()
+{
+	uint16_t reverse_pwm_mask = 0;
 
 	const char *pname_format;
 
@@ -441,7 +463,7 @@ void PWMOut::update_pwm_rev_mask()
 
 	} else {
 		PX4_ERR("PWM REV only for MAIN and AUX");
-		return;
+		return 0;
 	}
 
 	for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
@@ -457,18 +479,37 @@ void PWMOut::update_pwm_rev_mask()
 			reverse_pwm_mask |= ((int16_t)(ival != 0)) << i;
 		}
 	}
+
+	return reverse_pwm_mask;
 }
 
 void PWMOut::update_pwm_trims()
 {
 	PX4_DEBUG("update_pwm_trims");
 
-	if (!_mixing_output.mixers()) {
-		return;
+	int n_out = 0;
+
+	if (_legacy_mixer_mode) {
+		if (!_mixing_output.mixers()) {
+			return;
+		}
+
+		int16_t values[FMU_MAX_ACTUATORS] = {};
+
+		get_pwm_trim_values(values);
+
+		/* copy the trim values to the mixer offsets */
+		n_out = _mixing_output.mixers()->set_trims(values, FMU_MAX_ACTUATORS);
+		PX4_DEBUG("set %d trims", n_out);
+
+	} else {
+
+		get_pwm_trim_values(_pwm_trim_values);
 	}
+}
 
-	int16_t values[FMU_MAX_ACTUATORS] = {};
-
+void PWMOut::get_pwm_trim_values(int16_t values[FMU_MAX_ACTUATORS])
+{
 	const char *pname_format;
 
 	if (_class_instance == CLASS_DEVICE_PRIMARY) {
@@ -496,10 +537,6 @@ void PWMOut::update_pwm_trims()
 			PX4_DEBUG("%s: %d", pname, values[i]);
 		}
 	}
-
-	/* copy the trim values to the mixer offsets */
-	unsigned n_out = _mixing_output.mixers()->set_trims(values, FMU_MAX_ACTUATORS);
-	PX4_DEBUG("set %d trims", n_out);
 }
 
 int PWMOut::task_spawn(int argc, char *argv[])
@@ -589,10 +626,18 @@ void PWMOut::Run()
 	// push backup schedule
 	ScheduleDelayed(_backup_schedule_interval_us);
 
-	_mixing_output.update();
+	bool pwm_on;
 
-	/* update PWM status if armed or if disarmed PWM values are set */
-	bool pwm_on = _mixing_output.armed().armed || (_num_disarmed_set > 0) || _mixing_output.armed().in_esc_calibration_mode;
+	if (_legacy_mixer_mode) {
+		_mixing_output.update();
+
+		/* update PWM status if armed or if disarmed PWM values are set */
+		pwm_on = _mixing_output.armed().armed || (_num_disarmed_set > 0) || _mixing_output.armed().in_esc_calibration_mode;
+
+	} else {
+
+		pwm_on = _armed_sub.get().armed;
+	}
 
 	if (_pwm_on != pwm_on) {
 		_pwm_on = pwm_on;
@@ -613,10 +658,41 @@ void PWMOut::Run()
 		update_current_rate();
 	}
 
-	// check at end of cycle (updateSubscriptions() can potentially change to a different WorkQueue thread)
-	_mixing_output.updateSubscriptions(true, true);
+	if (_legacy_mixer_mode) {
+		// check at end of cycle (updateSubscriptions() can potentially change to a different WorkQueue thread)
+		_mixing_output.updateSubscriptions(true, true);
+
+	} else {
+		/// TODO: Reorganize
+		update_outputs();
+	}
 
 	perf_end(_cycle_perf);
+}
+
+void PWMOut::update_outputs()
+{
+	for (auto &output_sub : _output_control_subs) {
+		output_control_s output_control;
+
+		if (output_sub.update(&output_control)) {
+			for (uint8_t i = 0; i < output_control.n_outputs; i++) {
+				auto func = output_control.function[i];
+
+				if (func == 0) {
+					continue;
+				}
+
+				for (uint8_t j = 0; j < _num_outputs; j++) {
+					if (func == _assigned_functions[j]) {
+						_output_values[j] = output_control.value[i];
+					}
+				}
+			}
+		}
+	}
+
+	updateOutputs(false, _output_values, _num_outputs, 1);
 }
 
 void PWMOut::update_params()
@@ -624,7 +700,36 @@ void PWMOut::update_params()
 	update_pwm_rev_mask();
 	update_pwm_trims();
 
+	if (!_legacy_mixer_mode) {
+		update_function_map();
+	}
+
 	updateParams();
+}
+
+void PWMOut::update_function_map()
+{
+	_num_outputs = 0;
+
+	const char *pname_format = "PWM_AUX_FUNC%d";
+
+	for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
+		char pname[16];
+
+		/* fill the channel reverse mask from parameters */
+		sprintf(pname, pname_format, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t ival = 0;
+			param_get(param_h, &ival);
+			_assigned_functions[i] = ival;
+
+			if (ival > 0) {
+				_num_outputs++;
+			}
+		}
+	}
 }
 
 int PWMOut::ioctl(file *filp, int cmd, unsigned long arg)
