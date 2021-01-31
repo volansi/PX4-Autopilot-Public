@@ -53,6 +53,7 @@ MixingOutput::MixingOutput(uint8_t max_num_outputs, OutputModuleInterface &inter
 	{&interface, ORB_ID(actuator_controls_4)},
 	{&interface, ORB_ID(actuator_controls_5)},
 },
+_ouput_module_prefix(interface.get_param_prefix()),
 _scheduling_policy(scheduling_policy),
 _support_esc_calibration(support_esc_calibration),
 _max_num_outputs(max_num_outputs < MAX_ACTUATORS ? max_num_outputs : MAX_ACTUATORS),
@@ -105,6 +106,13 @@ void MixingOutput::printStatus() const
 void MixingOutput::updateParams()
 {
 	ModuleParams::updateParams();
+
+	// Load the Mode parameter
+	char pname[16];
+	sprintf(pname, "%s_MODE", _ouput_module_prefix);
+
+	uint8_t mode;
+	param_load(param_find())
 
 	// update mixer if we have one
 	if (_mixers) {
@@ -398,7 +406,34 @@ bool MixingOutput::update()
 
 	/* do mixing */
 	float outputs[MAX_ACTUATORS] {};
-	const unsigned mixed_num_outputs = _mixers->mix(outputs, _max_num_outputs);
+
+	unsigned mixed_num_outputs = 0;
+
+	if (_legacy_mixer_mode) {
+		mixed_num_outputs = _mixers->mix(outputs, _max_num_outputs);
+
+	} else {
+		// Update subscriptions to 'output_control'
+		for (auto &output_sub : _output_control_subs) {
+		output_control_s output_control;
+
+		if (output_sub.update(&output_control)) {
+			for (uint8_t i = 0; i < output_control.n_outputs; i++) {
+				auto func = output_control.function[i];
+
+				if (func == 0) {
+					continue;
+				}
+
+				for (uint8_t j = 0; j < _num_outputs; j++) {
+					if (func == _assigned_functions[j]) {
+						_output_values[j] = output_control.value[i];
+					}
+				}
+			}
+		}
+	}
+	}
 
 	/* the output limit call takes care of out of band errors, NaN and constrains */
 	output_limit_calc(_throttle_armed, armNoThrottle(), mixed_num_outputs, _reverse_output_mask,

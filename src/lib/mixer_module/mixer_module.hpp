@@ -49,6 +49,8 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/multirotor_motor_limits.h>
+#include <uORB/topics/output_control.h>
+#include <uORB/topics/output_feedback.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/test_motor.h>
 
@@ -238,6 +240,12 @@ private:
 
 	uORB::Subscription _armed_sub{ORB_ID(actuator_armed)};
 	uORB::SubscriptionCallbackWorkItem _control_subs[actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS];
+
+	/** ------------------- New Control Allocation / Output Control Method ------------------------- */
+	uORB::SubscriptionMultiArray<output_control_s> _output_control_subs{ORB_ID::output_control};
+	uint16_t _assigned_functions[FMU_MAX_ACTUATORS]{};
+	const char* _ouput_module_prefix;
+	/** -------------------------------------------------------------------------------------------- */
 
 	uORB::PublicationMulti<actuator_outputs_s> _outputs_pub{ORB_ID(actuator_outputs)};
 	uORB::PublicationMulti<multirotor_motor_limits_s> _to_mixer_status{ORB_ID(multirotor_motor_limits)}; 	///< mixer status flags

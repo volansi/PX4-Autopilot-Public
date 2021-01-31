@@ -56,11 +56,15 @@
 #include <uORB/PublicationMulti.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
+#include <uORB/SubscriptionMultiArray.hpp>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/multirotor_motor_limits.h>
+#include <uORB/topics/output_control.h>
+#include <uORB/topics/output_feedback.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/safety.h>
 
 using namespace time_literals;
 
@@ -125,6 +129,8 @@ public:
 	/** @see ModuleBase */
 	static int print_usage(const char *reason = nullptr);
 
+	static char* get_param_prefix() { return "PWM_AUX"; }
+
 	void Run() override;
 
 	/** @see ModuleBase::print_status() */
@@ -171,6 +177,12 @@ private:
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
+	uORB::SubscriptionData<actuator_armed_s> _armed_sub{ORB_ID(actuator_armed)};
+	uORB::SubscriptionData<safety_s> _safety_sub{ORB_ID(safety)};
+
+	uORB::SubscriptionMultiArray<output_control_s> _output_control_subs{ORB_ID::output_control};
+	uint16_t _assigned_functions[FMU_MAX_ACTUATORS]{};
+
 	unsigned	_num_outputs{0};
 	int		_class_instance{-1};
 
@@ -180,6 +192,13 @@ private:
 	bool		_test_mode{false};
 
 	unsigned	_num_disarmed_set{0};
+
+	bool		_legacy_mixer_mode{true};
+
+	uint16_t	_reverse_pwm_mask{0}; // Local version of legacy mixer variable
+	int16_t		_pwm_trim_values[FMU_MAX_ACTUATORS]{}; // Local version of legacy mixer variable
+	uint16_t	_output_values[FMU_MAX_ACTUATORS]; // The actual values output to the pins
+	void update_outputs();
 
 	perf_counter_t	_cycle_perf;
 	perf_counter_t	_interval_perf;
@@ -191,6 +210,9 @@ private:
 	int			pwm_ioctl(file *filp, int cmd, unsigned long arg);
 	void		update_pwm_rev_mask();
 	void		update_pwm_out_state(bool on);
+	uint16_t	get_pwm_rev_mask();
+	void		get_pwm_trim_values(int16_t values[]);
+	void		update_function_map();
 
 	void		update_params();
 
@@ -202,4 +224,56 @@ private:
 	PWMOut(const PWMOut &) = delete;
 	PWMOut operator=(const PWMOut &) = delete;
 
+
+	DEFINE_PARAMETERS_CUSTOM_PARENT(OutputModuleInterface,
+		(ParamInt<px4::params::PWM_AUX_MODE>)    _p_pwm_aux_mode,
+		(ParamInt<px4::params::PWM_AUX_FUNC1>)    _p_pwm_aux_func1,
+		(ParamInt<px4::params::PWM_AUX_FUNC2>)    _p_pwm_aux_func2,
+		(ParamInt<px4::params::PWM_AUX_FUNC3>)    _p_pwm_aux_func3,
+		(ParamInt<px4::params::PWM_AUX_FUNC4>)    _p_pwm_aux_func4,
+		(ParamInt<px4::params::PWM_AUX_FUNC5>)    _p_pwm_aux_func5,
+		(ParamInt<px4::params::PWM_AUX_FUNC6>)    _p_pwm_aux_func6,
+		(ParamInt<px4::params::PWM_AUX_FUNC7>)    _p_pwm_aux_func7,
+		(ParamInt<px4::params::PWM_AUX_FUNC8>)    _p_pwm_aux_func8,
+		(ParamInt<px4::params::PWM_AUX_MIN1>)    _p_pwm_aux_min1,
+		(ParamInt<px4::params::PWM_AUX_MIN2>)    _p_pwm_aux_min2,
+		(ParamInt<px4::params::PWM_AUX_MIN3>)    _p_pwm_aux_min3,
+		(ParamInt<px4::params::PWM_AUX_MIN4>)    _p_pwm_aux_min4,
+		(ParamInt<px4::params::PWM_AUX_MIN5>)    _p_pwm_aux_min5,
+		(ParamInt<px4::params::PWM_AUX_MIN6>)    _p_pwm_aux_min6,
+		(ParamInt<px4::params::PWM_AUX_MIN7>)    _p_pwm_aux_min7,
+		(ParamInt<px4::params::PWM_AUX_MIN8>)    _p_pwm_aux_min8,
+		(ParamInt<px4::params::PWM_AUX_MAX1>)    _p_pwm_aux_max1,
+		(ParamInt<px4::params::PWM_AUX_MAX2>)    _p_pwm_aux_max2,
+		(ParamInt<px4::params::PWM_AUX_MAX3>)    _p_pwm_aux_max3,
+		(ParamInt<px4::params::PWM_AUX_MAX4>)    _p_pwm_aux_max4,
+		(ParamInt<px4::params::PWM_AUX_MAX5>)    _p_pwm_aux_max5,
+		(ParamInt<px4::params::PWM_AUX_MAX6>)    _p_pwm_aux_max6,
+		(ParamInt<px4::params::PWM_AUX_MAX7>)    _p_pwm_aux_max7,
+		(ParamInt<px4::params::PWM_AUX_MAX8>)    _p_pwm_aux_max8,
+		(ParamFloat<px4::params::PWM_AUX_TRIM1>)    _p_pwm_aux_trim1,
+		(ParamFloat<px4::params::PWM_AUX_TRIM2>)    _p_pwm_aux_trim2,
+		(ParamFloat<px4::params::PWM_AUX_TRIM3>)    _p_pwm_aux_trim3,
+		(ParamFloat<px4::params::PWM_AUX_TRIM4>)    _p_pwm_aux_trim4,
+		(ParamFloat<px4::params::PWM_AUX_TRIM5>)    _p_pwm_aux_trim5,
+		(ParamFloat<px4::params::PWM_AUX_TRIM6>)    _p_pwm_aux_trim6,
+		(ParamFloat<px4::params::PWM_AUX_TRIM7>)    _p_pwm_aux_trim7,
+		(ParamFloat<px4::params::PWM_AUX_TRIM8>)    _p_pwm_aux_trim8,
+		(ParamInt<px4::params::PWM_AUX_DIS1>)    _p_pwm_aux_dis1,
+		(ParamInt<px4::params::PWM_AUX_DIS2>)    _p_pwm_aux_dis2,
+		(ParamInt<px4::params::PWM_AUX_DIS3>)    _p_pwm_aux_dis3,
+		(ParamInt<px4::params::PWM_AUX_DIS4>)    _p_pwm_aux_dis4,
+		(ParamInt<px4::params::PWM_AUX_DIS5>)    _p_pwm_aux_dis5,
+		(ParamInt<px4::params::PWM_AUX_DIS6>)    _p_pwm_aux_dis6,
+		(ParamInt<px4::params::PWM_AUX_DIS7>)    _p_pwm_aux_dis7,
+		(ParamInt<px4::params::PWM_AUX_DIS8>)    _p_pwm_aux_dis8,
+		(ParamInt<px4::params::PWM_AUX_REV1>)    _p_pwm_aux_rev1,
+		(ParamInt<px4::params::PWM_AUX_REV2>)    _p_pwm_aux_rev2,
+		(ParamInt<px4::params::PWM_AUX_REV3>)    _p_pwm_aux_rev3,
+		(ParamInt<px4::params::PWM_AUX_REV4>)    _p_pwm_aux_rev4,
+		(ParamInt<px4::params::PWM_AUX_REV5>)    _p_pwm_aux_rev5,
+		(ParamInt<px4::params::PWM_AUX_REV6>)    _p_pwm_aux_rev6,
+		(ParamInt<px4::params::PWM_AUX_REV7>)    _p_pwm_aux_rev7,
+		(ParamInt<px4::params::PWM_AUX_REV8>)    _p_pwm_aux_rev8
+	);
 };

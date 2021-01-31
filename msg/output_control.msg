@@ -1,0 +1,79 @@
+uint64 timestamp		 # time since system start (microseconds)
+
+uint8 MAX_ACTUATORS = 8  # Max actuators available in a single topic publication
+
+uint8 n_outputs
+uint16[8] function       # Actuator function being controlled
+float32[8] value         # Value being applied to each function
+
+# Actuator Function List
+uint16 FUNCTION_NONE = 0
+
+# Functions mapping to outputs of the Control Allocation module
+uint16 FUNCTION_CA0 = 1
+uint16 FUNCTION_CA1 = 2
+uint16 FUNCTION_CA2 = 3
+uint16 FUNCTION_CA3 = 4
+uint16 FUNCTION_CA4 = 5
+uint16 FUNCTION_CA5 = 6
+uint16 FUNCTION_CA6 = 7
+uint16 FUNCTION_CA7 = 8
+uint16 FUNCTION_CA8 = 9
+uint16 FUNCTION_CA9 = 10
+uint16 FUNCTION_CA10 = 11
+uint16 FUNCTION_CA11 = 12
+uint16 FUNCTION_CA12 = 13
+uint16 FUNCTION_CA13 = 14
+uint16 FUNCTION_CA14 = 15
+uint16 FUNCTION_CA15 = 16
+uint16 FUNCTION_CA16 = 17
+uint16 FUNCTION_CA17 = 18
+uint16 FUNCTION_CA18 = 19
+uint16 FUNCTION_CA19 = 20
+uint16 FUNCTION_CA20 = 21
+uint16 FUNCTION_CA21 = 22
+uint16 FUNCTION_CA22 = 23
+uint16 FUNCTION_CA23 = 24
+uint16 FUNCTION_CA24 = 25
+uint16 FUNCTION_CA25 = 26
+uint16 FUNCTION_CA26 = 27
+uint16 FUNCTION_CA27 = 28
+uint16 FUNCTION_CA28 = 29
+uint16 FUNCTION_CA29 = 30
+uint16 FUNCTION_CA30 = 31
+uint16 FUNCTION_CA31 = 32
+
+# Up to 8 individual actuators controlled by DO_SET_SERVO
+uint16 FUNCTION_MAVLINK_SERVO1 = 33
+uint16 FUNCTION_MAVLINK_SERVO2 = 34
+uint16 FUNCTION_MAVLINK_SERVO3 = 35
+uint16 FUNCTION_MAVLINK_SERVO4 = 36
+uint16 FUNCTION_MAVLINK_SERVO5 = 37
+uint16 FUNCTION_MAVLINK_SERVO6 = 38
+uint16 FUNCTION_MAVLINK_SERVO7 = 39
+uint16 FUNCTION_MAVLINK_SERVO0 = 40
+
+# Misc. functions for different vehicle types
+uint16 FUNCTION_LANDING_GEAR = 41
+uint16 FUNCTION_LANDING_GEAR_DOOR = 42
+uint16 FUNCTION_PAYLOAD_RELEASE = 43
+
+# Specific multicopter motors
+uint16 FUNCTION_MR_MOTOR1 = 101
+uint16 FUNCTION_MR_MOTOR2 = 102
+uint16 FUNCTION_MR_MOTOR3 = 103
+uint16 FUNCTION_MR_MOTOR4 = 104
+uint16 FUNCTION_MR_MOTOR5 = 105
+uint16 FUNCTION_MR_MOTOR6 = 106
+uint16 FUNCTION_MR_MOTOR7 = 107
+uint16 FUNCTION_MR_MOTOR8 = 108
+
+# Specific fixed-wing functions
+uint16 FUNCTION_AILERON1 = 200
+uint16 FUNCTION_AILERON2 = 201
+uint16 FUNCTION_ELEVATOR1 = 202
+uint16 FUNCTION_ELEVATOR2 = 203
+uint16 FUNCTION_RUDDER1 = 204
+uint16 FUNCTION_RUDDER2 = 205
+uint16 FUNCTION_ENGINE1 = 206
+uint16 FUNCTION_ENGINE2 = 207
