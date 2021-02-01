@@ -442,7 +442,7 @@ bool OutputControl::update()
 	/* overwrite outputs in case of force_failsafe with _failsafe_value values */
 	if (_armed.force_failsafe) {
 		for (size_t i = 0; i < MAX_ACTUATORS; i++) {
-			if (mixed_outputs_mask && (1 << i)) {
+			if (mixed_outputs_mask & (1 << i)) {
 				_current_output_value[i] = _failsafe_value[i];
 			}
 		}
@@ -453,7 +453,7 @@ bool OutputControl::update()
 	/* overwrite outputs in case of lockdown or parachute triggering with disarmed values */
 	if (_armed.lockdown || _armed.manual_lockdown) {
 		for (size_t i = 0; i < MAX_ACTUATORS; i++) {
-			if (mixed_outputs_mask && (1 << i)) {
+			if (mixed_outputs_mask & (1 << i)) {
 				_current_output_value[i] = _disarmed_value[i];
 			}
 		}
