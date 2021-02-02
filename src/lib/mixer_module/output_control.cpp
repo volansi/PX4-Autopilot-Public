@@ -108,16 +108,16 @@ void OutputControl::updateParams()
 	/// TODO: for later: this is the param that will switch between mixer-file
 	/// output and parameter-controlled output
 	/// Should we have a mode where we allow both to coexist, or should that be the default?
-	char pname[16];
-	sprintf(pname, "%s_MODE", _output_module_prefix);
+	// char pname[16];
+	// sprintf(pname, "%s_MODE", _output_module_prefix);
 
-	int32_t mode;
-	param_get(param_find(pname), &mode);
+	// int32_t mode;
+	// param_get(param_find(pname), &mode);
 
-	if (mode == 0) {
-		// Legacy mixer mode; don't run this module?
-		return;
-	}
+	// if (mode == 0) {
+	// 	// Legacy mixer mode; don't run this module?
+	// 	return;
+	// }
 
 	/** Update Function Mappings */
 
@@ -157,6 +157,22 @@ void OutputControl::updateParams()
 
 		}
 	}
+}
+
+// bool OutputControl::updateOutputs(bool stop_motors, uint16_t outputs[MAX_ACTUATORS],
+// 				   unsigned num_outputs, unsigned num_control_groups_updated)
+void OutputControl::mixingOutputCallback(uint16_t *outputs, unsigned nval)
+{
+	unsigned num_outputs = (nval < _max_num_outputs) ? nval : _max_num_outputs;
+
+	for (unsigned i = 0; i < num_outputs; i++) {
+		if (this->getAssignedFunction(i) == output_control_s::FUNCTION_MIXER) {
+			/// TODO: Have functions MIXER1 through MIXER16 and map outputs by index
+			_current_output_value[i] = outputs[i];
+		}
+	}
+
+	// return true;
 }
 
 bool OutputControl::updateSubscriptions(bool allow_wq_switch, bool limit_callbacks_to_primary)

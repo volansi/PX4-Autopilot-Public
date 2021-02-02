@@ -56,6 +56,12 @@
 
 #include "mixer_module.hpp" // For OutputModuleInterface
 
+class OutputControlInterface
+{
+public:
+	virtual void mixingOutputCallback(uint16_t *outputs, unsigned nval) = 0;
+};
+
 /**
  * @class OutputControl
  * This handles the mixing, arming/disarming and all subscriptions required for that.
@@ -63,7 +69,7 @@
  * It can also drive the scheduling of the OutputModuleInterface (via uORB callbacks
  * to reduce output latency).
  */
-class OutputControl : public ModuleParams
+class OutputControl : public ModuleParams, public OutputControlInterface
 {
 public:
 	static constexpr int MAX_ACTUATORS = OutputModuleInterface::MAX_ACTUATORS;
@@ -122,6 +128,8 @@ public:
 	void setTrims(int16_t *values, unsigned nval);
 	unsigned getTrims(int16_t *values);
 
+	uint16_t getAssignedFunction(int index) { return _assigned_function[index]; }
+
 	uint16_t &reverseOutputMask() { return _reverse_output_mask; }
 	uint16_t &failsafeValue(int index) { return _failsafe_value[index]; }
 	/** Disarmed values: disarmedValue < minValue needs to hold */
@@ -131,8 +139,12 @@ public:
 
 	void setIgnoreLockdown(bool ignore_lockdown) { _ignore_lockdown = ignore_lockdown; }
 
-// protected:
 	void updateParams() override;
+
+	// "Callback" from MixingOutput by way of the the output module
+	void mixingOutputCallback(uint16_t *outputs, unsigned nval);
+	// bool updateOutputs(bool stop_motors, uint16_t outputs[MAX_ACTUATORS],
+	// 			   unsigned num_outputs, unsigned num_control_groups_updated);
 
 private:
 
