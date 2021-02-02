@@ -273,6 +273,24 @@ void OutputControl::setAllDisarmedValues(uint16_t value)
 	}
 }
 
+void OutputControl::setTrims(int16_t *values, unsigned nval)
+{
+	const unsigned N = (nval < MAX_ACTUATORS) ? nval : MAX_ACTUATORS;
+
+	for (unsigned i = 0; i < N; i++) {
+		_trim_value[i] = values[i];
+	}
+}
+
+unsigned OutputControl::getTrims(int16_t *values)
+{
+	for (unsigned i = 0; i < MAX_ACTUATORS; i++) {
+		values[i] = _trim_value[i];
+	}
+
+	return MAX_ACTUATORS;
+}
+
 void OutputControl::unregister()
 {
 	for (auto &control_sub : _control_subs) {
