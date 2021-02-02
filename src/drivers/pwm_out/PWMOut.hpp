@@ -54,7 +54,6 @@
 #include <px4_platform_common/log.h>
 #include <px4_platform_common/module.h>
 #include <uORB/Publication.hpp>
-#include <uORB/PublicationMulti.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
 #include <uORB/SubscriptionMultiArray.hpp>
@@ -142,6 +141,9 @@ public:
 
 	static int test();
 
+	// Test the use of MAVLink servo setup by publishing to output_control_mavlink
+	int mavlink_servo_test(int servo_id, float value);
+
 	virtual int	ioctl(file *filp, int cmd, unsigned long arg);
 
 	virtual int	init();
@@ -184,6 +186,8 @@ private:
 
 	uORB::SubscriptionMultiArray<output_control_s> _output_control_subs{ORB_ID::output_control};
 	uint16_t _assigned_functions[FMU_MAX_ACTUATORS] {};
+
+	uORB::Publication<output_control_s> _output_control_mavlink_pub {ORB_ID(output_control_mavlink)};
 
 	unsigned	_num_outputs{0};
 	int		_class_instance{-1};

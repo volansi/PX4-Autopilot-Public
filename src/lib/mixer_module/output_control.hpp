@@ -86,6 +86,8 @@ public:
 
 	~OutputControl();
 
+	void setDriverInstance(uint8_t instance) { _driver_instance = instance; }
+
 	void printStatus() const;
 
 	/**

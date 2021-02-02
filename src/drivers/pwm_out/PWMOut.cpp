@@ -72,25 +72,22 @@ int PWMOut::init()
 
 	// XXX best would be to register / de-register the device depending on modes
 
-	if (_p_pwm_aux_mode.get() == 0) {
-		// Legacy mixer-module operation
-		_legacy_mixer_mode = true;
+	/* try to claim the generic PWM output device node as well - it's OK if we fail at this */
+	_class_instance = register_class_devname(PWM_OUTPUT_BASE_DEVICE_PATH);
 
-		/* try to claim the generic PWM output device node as well - it's OK if we fail at this */
-		_class_instance = register_class_devname(PWM_OUTPUT_BASE_DEVICE_PATH);
-
-		if (_class_instance == CLASS_DEVICE_PRIMARY) {
-			/* lets not be too verbose */
-		} else if (_class_instance < 0) {
-			PX4_ERR("FAILED registering class device");
-		}
-
-		_mixing_output.setDriverInstance(_class_instance);
-
-	} else {
-
-		_legacy_mixer_mode = false;
+	if (_class_instance == CLASS_DEVICE_PRIMARY) {
+		/* lets not be too verbose */
+	} else if (_class_instance < 0) {
+		PX4_ERR("FAILED registering class device");
 	}
+
+	// Legacy mixer-module operation flag
+	_legacy_mixer_mode = (_p_pwm_aux_mode.get() == 0) ? true : false;
+
+	_mixing_output.setDriverInstance(_class_instance);
+	_output_control.setDriverInstance(_class_instance);
+
+	PX4_INFO("Initialising with mixer_mode = %d (PWM_AUX_MODE = %d)", _legacy_mixer_mode, _p_pwm_aux_mode.get());
 
 	/* force a reset of the update rate */
 	_current_update_rate = 0;
@@ -663,6 +660,8 @@ void PWMOut::update_params()
 	bool new_mode = (_p_pwm_aux_mode.get() == 0) ? true : false;
 
 	if (new_mode != _legacy_mixer_mode) {
+		PX4_INFO("Changing _legacy_mixer_mode to %d", new_mode);
+
 		if (_legacy_mixer_mode) {
 			// Disabling mixer mode
 			_mixing_output.unregister();
@@ -1955,6 +1954,21 @@ err_out_no_test:
 	return rv;
 }
 
+int PWMOut::mavlink_servo_test(int servo_id, float value)
+{
+	output_control_s controls = {};
+	controls.timestamp = hrt_absolute_time();
+	controls.n_outputs = 1;
+	controls.function[0] = output_control_s::FUNCTION_MAVLINK_SERVO0 + servo_id;
+	controls.value[0] = value;
+
+	PX4_INFO("Publishing output_control_mavlink with servo %d, value %.3f", servo_id, (double)value);
+
+	_output_control_mavlink_pub.publish(controls);
+
+	return PX4_OK;
+}
+
 int PWMOut::custom_command(int argc, char *argv[])
 {
 	PortMode new_mode = PORT_MODE_UNSET;
@@ -2094,6 +2108,18 @@ int PWMOut::custom_command(int argc, char *argv[])
 		return test();
 	}
 
+	if (!strcmp(verb, "mavtest")) {
+		int servo_id = 0;
+		float servo_val = 1.f;
+
+		if (argc > 2) {
+			servo_id = strtol(argv[1], nullptr, 0);
+			servo_val = strtof(argv[2], nullptr);
+		}
+
+		return PWMOut::get_instance()->mavlink_servo_test(servo_id, servo_val);
+	}
+
 	return print_usage("unknown command");
 }
 
@@ -2148,9 +2174,11 @@ int PWMOut::print_status()
 	perf_print_counter(_interval_perf);
 
 	if (_legacy_mixer_mode) {
+		PX4_INFO("Legacy mixer mode selected");
 		_mixing_output.printStatus();
 
 	} else {
+		PX4_INFO("New output control mode selected");
 		_output_control.printStatus();
 
 	}
@@ -2230,6 +2258,8 @@ mixer files.
 	PRINT_MODULE_USAGE_ARG("<bus_id> <rate>", "Specify the bus id (>=0) and rate in Hz", false);
 
 	PRINT_MODULE_USAGE_COMMAND_DESCR("test", "Test inputs and outputs");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("mavtest", "Test control of a servo via MAVLink DO_SET_SERVO");
+	PRINT_MODULE_USAGE_ARG("<ID> <val>", "Servo ID (1-8) and value ([-1, 1])", true);
 	PRINT_MODULE_USAGE_DEFAULT_COMMANDS();
 
 	return 0;

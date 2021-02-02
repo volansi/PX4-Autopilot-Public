@@ -122,10 +122,12 @@ void OutputControl::updateParams()
 	/** Update Function Mappings */
 
 	updateParamValues("FUNC", _assigned_function);
-	updateParamValues("MIN",  _min_value);
-	updateParamValues("MAX",  _max_value);
+	// updateParamValues("MIN",  _min_value);
+	// updateParamValues("MAX",  _max_value);
 	updateParamValues("FAIL", _failsafe_value);
 	updateParamValues("DIS",  _disarmed_value);
+	updateMinValues();
+	updateMaxValues();
 	// updateParamValues("TRIM", _trim_value);
 	updateTrimValues();
 	updateReverseMask();
@@ -148,6 +150,7 @@ void OutputControl::updateParams()
 			   func <= output_control_s::FUNCTION_MAVLINK_SERVO7) {
 
 			_groups_required |= (1 << 2);
+			PX4_INFO("Enabling group MAVLINK");
 
 		} else if (func != output_control_s::FUNCTION_NONE) {
 			_groups_required |= (1 << 3);
@@ -199,7 +202,7 @@ bool OutputControl::updateSubscriptions(bool allow_wq_switch, bool limit_callbac
 
 			if (_groups_required & (1 << i)) {
 				if (_control_subs[i].registerCallback()) {
-					PX4_DEBUG("subscribed to output_control_%d", i);
+					PX4_INFO("subscribed to output_control_%d", i);
 
 					if (limit_callbacks_to_primary) {
 						if (i == 0) {
@@ -211,7 +214,7 @@ bool OutputControl::updateSubscriptions(bool allow_wq_switch, bool limit_callbac
 					}
 
 				} else {
-					PX4_ERR("output_control_%d register callback failed!", i);
+					PX4_INFO("output_control_%d register callback failed!", i);
 				}
 			}
 		}
@@ -226,8 +229,8 @@ bool OutputControl::updateSubscriptions(bool allow_wq_switch, bool limit_callbac
 	_groups_subscribed = _groups_required;
 	setMaxTopicUpdateRate(_max_topic_update_interval_us);
 
-	PX4_DEBUG("_groups_required 0x%08x", _groups_required);
-	PX4_DEBUG("_groups_subscribed 0x%08x", _groups_subscribed);
+	PX4_INFO("_groups_required 0x%08x", _groups_required);
+	PX4_INFO("_groups_subscribed 0x%08x", _groups_subscribed);
 
 	unlock();
 
@@ -448,6 +451,7 @@ bool OutputControl::update()
 			output_control_s controls;
 
 			if (output_sub.update(&controls)) {
+				PX4_INFO("Update group %d", grp);
 				n_updates++;
 
 				for (uint8_t i = 0; i < controls.n_outputs; i++) {
@@ -459,6 +463,7 @@ bool OutputControl::update()
 
 					for (uint8_t j = 0; j < _max_num_outputs; j++) {
 						if (func == _assigned_function[j]) {
+							PX4_INFO("Group %d: Set output %d (func %d) to val %f", grp, j, func, (double)controls.value[i]);
 							outputs[j] = controls.value[i];
 							mixed_outputs_mask |= (1 << j);
 						}
@@ -472,8 +477,8 @@ bool OutputControl::update()
 
 	/* the output limit call takes care of out of band errors, NaN and constrains */
 	/// TODO: Can use mixed_outputs_mask to control which channels get updated instead of using the old mixed_outputs_max
-	output_limit_calc(_throttle_armed, armNoThrottle(), MAX_ACTUATORS, _reverse_output_mask,
-			  _disarmed_value, _min_value, _max_value, outputs, _current_output_value, &_output_limit);
+	output_limit_calc_mask(_throttle_armed, armNoThrottle(), mixed_outputs_mask, _reverse_output_mask,
+			       _disarmed_value, _min_value, _max_value, outputs, _current_output_value, &_output_limit);
 
 	/* overwrite outputs in case of force_failsafe with _failsafe_value values */
 	if (_armed.force_failsafe) {
@@ -578,6 +583,9 @@ void OutputControl::updateFailsafeValues()
 
 void OutputControl::updateDisarmedValues()
 {
+	int32_t default_dis;
+	param_get(param_find("PWM_DISARMED"), &default_dis); /// TODO: This needs to be per-instance; i.e. different for UAVCAN
+
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
 		char pname[16];
 
@@ -588,6 +596,13 @@ void OutputControl::updateDisarmedValues()
 		if (param_h != PARAM_INVALID) {
 			int32_t pval = 0;
 			param_get(param_h, &pval);
+
+			if (pval < 0) {
+				// In the case of the default -1, use PWM_DISARMED
+				PX4_INFO("%d: Defaulting to PWM_DISARMED %d", i, default_dis);
+				pval = default_dis;
+			}
+
 			_disarmed_value[i] = (uint16_t)pval;
 			PX4_DEBUG("%s: %d", pname, _disarmed_value[i]);
 		}
@@ -596,6 +611,9 @@ void OutputControl::updateDisarmedValues()
 
 void OutputControl::updateMinValues()
 {
+	int32_t default_min;
+	param_get(param_find("PWM_MIN"), &default_min); /// TODO: This needs to be per-instance; i.e. different for UAVCAN
+
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
 		char pname[16];
 
@@ -606,6 +624,13 @@ void OutputControl::updateMinValues()
 		if (param_h != PARAM_INVALID) {
 			int32_t pval = 0;
 			param_get(param_h, &pval);
+
+			if (pval < 0) {
+				// In the case of the default -1, use PWM_MIN
+				PX4_INFO("%d: Defaulting to PWM_MIN %d", i, default_min);
+				pval = default_min;
+			}
+
 			_min_value[i] = (uint16_t)pval;
 			PX4_DEBUG("%s: %d", pname, _min_value[i]);
 		}
@@ -614,6 +639,9 @@ void OutputControl::updateMinValues()
 
 void OutputControl::updateMaxValues()
 {
+	int32_t default_max;
+	param_get(param_find("PWM_MAX"), &default_max); /// TODO: This needs to be per-instance; i.e. different for UAVCAN
+
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
 		char pname[16];
 
@@ -624,6 +652,12 @@ void OutputControl::updateMaxValues()
 		if (param_h != PARAM_INVALID) {
 			int32_t pval = 0;
 			param_get(param_h, &pval);
+
+			if (pval < 0) {
+				// In the case of the default -1, use PWM_MAX
+				pval = default_max;
+			}
+
 			_max_value[i] = (uint16_t)pval;
 			PX4_DEBUG("%s: %d", pname, _max_value[i]);
 		}
