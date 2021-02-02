@@ -1,4 +1,5 @@
 uint64 timestamp		 # time since system start (microseconds)
+uint64 timestamp_sample	 # the timestamp the data this control response is based on was sampled
 
 uint8 NUM_OUTPUT_CONTROL_GROUPS = 4 # Max number of instances of this topic
 uint8 MAX_ACTUATORS = 8  # Max actuators available in a single topic publication
@@ -90,4 +91,4 @@ uint16 FUNCTION_CA29 = 1029
 uint16 FUNCTION_CA30 = 1030
 uint16 FUNCTION_CA31 = 1031
 
-# TOPICS output_control_ca output_control_mixer output_control_mavlink output_control_internal
+# TOPICS output_control output_control_ca output_control_mixer output_control_mavlink output_control_internal

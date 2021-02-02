@@ -78,6 +78,8 @@ public:
 	virtual bool updateOutputs(bool stop_motors, uint16_t outputs[MAX_ACTUATORS],
 				   unsigned num_outputs, unsigned num_control_groups_updated) = 0;
 
+	virtual const char *get_param_prefix() { return ""; }
+
 	/** called whenever the mixer gets updated/reset */
 	virtual void mixerChanged() {};
 };
@@ -240,12 +242,6 @@ private:
 
 	uORB::Subscription _armed_sub{ORB_ID(actuator_armed)};
 	uORB::SubscriptionCallbackWorkItem _control_subs[actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS];
-
-	/** ------------------- New Control Allocation / Output Control Method ------------------------- */
-	uORB::SubscriptionMultiArray<output_control_s> _output_control_subs{ORB_ID::output_control};
-	uint16_t _assigned_functions[FMU_MAX_ACTUATORS]{};
-	const char* _ouput_module_prefix;
-	/** -------------------------------------------------------------------------------------------- */
 
 	uORB::PublicationMulti<actuator_outputs_s> _outputs_pub{ORB_ID(actuator_outputs)};
 	uORB::PublicationMulti<multirotor_motor_limits_s> _to_mixer_status{ORB_ID(multirotor_motor_limits)}; 	///< mixer status flags

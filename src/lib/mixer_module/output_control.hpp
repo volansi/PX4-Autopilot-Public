@@ -45,6 +45,7 @@
 #include <uORB/PublicationMulti.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
+#include <uORB/SubscriptionMultiArray.hpp>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/multirotor_motor_limits.h>
@@ -85,8 +86,6 @@ public:
 
 	~OutputControl();
 
-	void setDriverInstance(uint8_t instance) { _driver_instance = instance; }
-
 	void printStatus() const;
 
 	/**
@@ -111,23 +110,6 @@ public:
 
 	void setMaxTopicUpdateRate(unsigned max_topic_update_interval_us);
 
-	/**
-	 * Reset (unload) the complete mixer, called from another thread.
-	 * This is thread-safe, as long as only one other thread at a time calls this.
-	 */
-	void resetMixerThreadSafe();
-
-	void resetMixer();
-
-	/**
-	 * Load (append) a new mixer from a buffer, called from another thread.
-	 * This is thread-safe, as long as only one other thread at a time calls this.
-	 * @return 0 on success, <0 error otherwise
-	 */
-	int loadMixerThreadSafe(const char *buf, unsigned len);
-
-	int loadMixer(const char *buf, unsigned len);
-
 	const actuator_armed_s &armed() const { return _armed; }
 
 	void setAllFailsafeValues(uint16_t value);
@@ -144,7 +126,7 @@ public:
 
 	void setIgnoreLockdown(bool ignore_lockdown) { _ignore_lockdown = ignore_lockdown; }
 
-protected:
+// protected:
 	void updateParams() override;
 
 private:
@@ -175,7 +157,6 @@ private:
 	void updateOutputSlewrateMultirotorMixer();
 	void updateOutputSlewrateSimplemixer();
 	void setAndPublishActuatorOutputs(unsigned num_outputs, actuator_outputs_s &actuator_outputs);
-	void publishMixerStatus(const actuator_outputs_s &actuator_outputs);
 	void updateLatencyPerfCounter(const actuator_outputs_s &actuator_outputs);
 
 	static int controlCallback(uintptr_t handle, uint8_t control_group, uint8_t control_index, float &input);
@@ -195,11 +176,11 @@ private:
 	output_limit_t _output_limit;
 
 	uORB::Subscription _armed_sub{ORB_ID(actuator_armed)};
-	uORB::SubscriptionCallbackWorkItem _control_subs[output_controls_s::NUM_OUTPUT_CONTROL_GROUPS];
+	uORB::SubscriptionCallbackWorkItem _control_subs[output_control_s::NUM_OUTPUT_CONTROL_GROUPS];
 
 	/** ------------------- New Control Allocation / Output Control Method ------------------------- */
 	// uORB::SubscriptionMultiArray<output_control_s> _output_control_subs{ORB_ID::output_control};
-	int32_t _assigned_functions[output_control_s::MAX_ACTUATORS] {};
+	uint16_t _assigned_function[MAX_ACTUATORS] {};
 	const char *_output_module_prefix;
 	/** -------------------------------------------------------------------------------------------- */
 

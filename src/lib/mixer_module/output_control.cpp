@@ -49,9 +49,9 @@ OutputControl::OutputControl(uint8_t max_num_outputs, OutputModuleInterface &int
 	{&interface, ORB_ID(output_control_ca)},
 	{&interface, ORB_ID(output_control_mixer)},
 	{&interface, ORB_ID(output_control_mavlink)},
-	{&interface, ORB_ID(output_control_other)},
+	{&interface, ORB_ID(output_control_internal)},
 },
-_ouput_module_prefix(interface.get_param_prefix()),
+_output_module_prefix(interface.get_param_prefix()),
 _scheduling_policy(scheduling_policy),
 _support_esc_calibration(support_esc_calibration),
 _max_num_outputs(max_num_outputs < MAX_ACTUATORS ? max_num_outputs : MAX_ACTUATORS),
@@ -94,8 +94,9 @@ void OutputControl::printStatus() const
 	PX4_INFO("Channel Configuration:");
 
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
-		PX4_INFO("Channel %i: value: %i, failsafe: %d, disarmed: %d, min: %d, max: %d", i, _current_output_value[i],
-			 _failsafe_value[i], _disarmed_value[i], _min_value[i], _max_value[i]);
+		PX4_INFO("Channel %i: value: %i, failsafe: %d, disarmed: %d, min: %d, max: %d, function: %d", i,
+			 _current_output_value[i],
+			 _failsafe_value[i], _disarmed_value[i], _min_value[i], _max_value[i], _assigned_function[i]);
 	}
 }
 
@@ -106,15 +107,21 @@ void OutputControl::updateParams()
 	// Load the Mode parameter
 	/// TODO: for later: this is the param that will switch between mixer-file
 	/// output and parameter-controlled output
-	// char pname[16];
-	// sprintf(pname, "%s_MODE", _ouput_module_prefix);
+	/// Should we have a mode where we allow both to coexist, or should that be the default?
+	char pname[16];
+	sprintf(pname, "%s_MODE", _output_module_prefix);
 
-	// uint8_t mode;
-	// param_load(param_find(pname), &mode);
+	int32_t mode;
+	param_get(param_find(pname), &mode);
+
+	if (mode == 0) {
+		// Legacy mixer mode; don't run this module?
+		return;
+	}
 
 	/** Update Function Mappings */
 
-	updateParamValues("FUNC", _assigned_functions);
+	updateParamValues("FUNC", _assigned_function);
 	updateParamValues("MIN",  _min_value);
 	updateParamValues("MAX",  _max_value);
 	updateParamValues("FAIL", _failsafe_value);
@@ -127,10 +134,10 @@ void OutputControl::updateParams()
 	_groups_required = 0;
 
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
-		int32_t func = _assigned_functions[i];
+		int32_t func = _assigned_function[i];
 
 		if (func >= output_control_s::FUNCTION_CA0 &&
-		    func <= output_control_s::FUNCTION_CA32) {
+		    func <= output_control_s::FUNCTION_CA15) {
 
 			_groups_required |= (1 << 0);
 
@@ -167,7 +174,7 @@ bool OutputControl::updateSubscriptions(bool allow_wq_switch, bool limit_callbac
 		const bool sub_group_ca = (_groups_required & (1 << 0));
 		const bool sub_group_mix = (_groups_required & (1 << 1));
 
-		if (allow_wq_switch && !_wq_switched && (sub_group_0 || sub_group_1)) {
+		if (allow_wq_switch && !_wq_switched && (sub_group_ca || sub_group_mix)) {
 			if (_interface.ChangeWorkQeue(px4::wq_configurations::rate_ctrl)) {
 				// let the new WQ handle the subscribe update
 				_wq_switched = true;
@@ -231,7 +238,7 @@ void OutputControl::setMaxTopicUpdateRate(unsigned max_topic_update_interval_us)
 {
 	_max_topic_update_interval_us = max_topic_update_interval_us;
 
-	for (unsigned i = 0; i < output_controls_s::NUM_OUTPUT_CONTROL_GROUPS; i++) {
+	for (unsigned i = 0; i < output_control_s::NUM_OUTPUT_CONTROL_GROUPS; i++) {
 		if (_groups_subscribed & (1 << i)) {
 			_control_subs[i].set_interval_us(_max_topic_update_interval_us);
 		}
@@ -272,6 +279,14 @@ void OutputControl::unregister()
 		control_sub.unregisterCallback();
 	}
 }
+
+/**!
+ * TODO:
+ *
+ * 1. Handle slew rate limiting.  Should that apply to the output module specifically, or be handled upstream?
+ * 2. Handle "motor test" / general "test" override feature.  Should this be handled at the output module level,
+ *    or upstream?
+ */
 
 // void OutputControl::updateOutputSlewrateMultirotorMixer()
 // {
@@ -408,12 +423,15 @@ bool OutputControl::update()
 
 	// Update subscriptions to 'output_control'
 	uint8_t grp = 0;
+	uint8_t n_updates = 0;
 
 	for (auto &output_sub : _control_subs) {
-		if (_groups_required && (1 << grp)) {
+		if (_groups_required & (1 << grp)) {
 			output_control_s controls;
 
 			if (output_sub.update(&controls)) {
+				n_updates++;
+
 				for (uint8_t i = 0; i < controls.n_outputs; i++) {
 					auto func = controls.function[i];
 
@@ -421,9 +439,9 @@ bool OutputControl::update()
 						continue;
 					}
 
-					for (uint8_t j = 0; j < _num_outputs; j++) {
-						if (func == _assigned_functions[j]) {
-							_output_values[j] = controls.value[i];
+					for (uint8_t j = 0; j < _max_num_outputs; j++) {
+						if (func == _assigned_function[j]) {
+							outputs[j] = controls.value[i];
 							mixed_outputs_mask |= (1 << j);
 						}
 					}
@@ -467,11 +485,10 @@ bool OutputControl::update()
 		actuator_outputs_s actuator_outputs{};
 		setAndPublishActuatorOutputs(MAX_ACTUATORS, actuator_outputs); // mixed_num_outputs -> MAX_ACTUATORS
 
-		publishMixerStatus(actuator_outputs);
 		updateLatencyPerfCounter(actuator_outputs);
 	}
 
-	handleCommands();
+	// handleCommands();
 
 	return true;
 }
@@ -495,47 +512,14 @@ OutputControl::updateLatencyPerfCounter(const actuator_outputs_s &actuator_outpu
 	// use first valid timestamp_sample for latency tracking
 	for (int i = 0; i < output_control_s::NUM_OUTPUT_CONTROL_GROUPS; i++) {
 		const bool required = _groups_required & (1 << i);
-		const hrt_abstime &timestamp_sample = _controls[i].timestamp_sample;
+		const hrt_abstime &timestamp_sample =
+			_controls[i].timestamp_sample; /// TODO: Ensure this value gets set (timestamp_sample)
 
 		if (required && (timestamp_sample > 0)) {
 			perf_set_elapsed(_control_latency_perf, actuator_outputs.timestamp - timestamp_sample);
 			break;
 		}
 	}
-}
-
-int OutputControl::controlCallback(uintptr_t handle, uint8_t control_group, uint8_t control_index, float &input)
-{
-	const OutputControl *output = (const OutputControl *)handle;
-
-	input = output->_controls[control_group].control[control_index];
-
-	/* limit control input */
-	input = math::constrain(input, -1.f, 1.f);
-
-	/* motor spinup phase - lock throttle to zero */
-	if (output->_output_limit.state == OUTPUT_LIMIT_STATE_RAMP) {
-		/// TODO: This was put in place for the INDEX_ALLOCATED groups
-		///       Why is this needed for ALL allocated actuators? Is this
-		///       assuming CA is only used for multicopters? How does this
-		///       work for fixed-wing controls?
-		/* limit the throttle output to zero during motor spinup,
-			* as the motors cannot follow any demand yet
-			*/
-		input = 0.0f;
-	}
-
-	/* throttle not arming - mark throttle input as invalid */
-	if (output->armNoThrottle() && !output->_armed.in_esc_calibration_mode) {
-		/// TODO: This was put in place for the INDEX_ALLOCATED groups
-		///       Why is this needed for ALL allocated actuators? Is this
-		///       assuming CA is only used for multicopters? How does this
-		///       work for fixed-wing controls?
-		/* set the throttle to an invalid value */
-		input = NAN;
-	}
-
-	return 0;
 }
 
 void OutputControl::updateParamValues(const char *type, uint16_t values[MAX_ACTUATORS])
