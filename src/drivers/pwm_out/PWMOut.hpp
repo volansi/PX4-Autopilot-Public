@@ -167,7 +167,7 @@ private:
 	static_assert(FMU_MAX_ACTUATORS <= MAX_ACTUATORS, "Increase MAX_ACTUATORS if this fails");
 
 	OutputControl _output_control{FMU_MAX_ACTUATORS, *this, OutputControl::SchedulingPolicy::Auto, true};
-	MixingOutput _mixing_output{FMU_MAX_ACTUATORS, *this, MixingOutput::SchedulingPolicy::Auto, true, true, (OutputControlInterface*)&_output_control};
+	MixingOutput _mixing_output{FMU_MAX_ACTUATORS, *this, MixingOutput::SchedulingPolicy::Auto, true, true, (OutputControlInterface *) &_output_control};
 
 	Mode		_mode{MODE_NONE};
 

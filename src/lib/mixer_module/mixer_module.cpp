@@ -359,10 +359,11 @@ bool MixingOutput::update()
 
 		if (num_motor_test > 0) {
 			// if (_ointerface == nullptr) { /// TODO: ensure this works in motor test context
-				if (_interface.updateOutputs(false, _current_output_value, num_motor_test, 1)) {
-					actuator_outputs_s actuator_outputs{};
-					setAndPublishActuatorOutputs(num_motor_test, actuator_outputs);
-				}
+			if (_interface.updateOutputs(false, _current_output_value, num_motor_test, 1)) {
+				actuator_outputs_s actuator_outputs{};
+				setAndPublishActuatorOutputs(num_motor_test, actuator_outputs);
+			}
+
 			// } else {
 			// 	_ointerface->mixingOutputCallback(_current_output_value, num_motor_test);
 			// }
@@ -444,6 +445,7 @@ bool MixingOutput::update()
 			publishMixerStatus(actuator_outputs);
 			updateLatencyPerfCounter(actuator_outputs);
 		}
+
 	} else {
 		_ointerface->mixingOutputCallback(_current_output_value, mixed_num_outputs);
 	}

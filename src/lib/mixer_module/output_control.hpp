@@ -143,8 +143,6 @@ public:
 
 	// "Callback" from MixingOutput by way of the the output module
 	void mixingOutputCallback(uint16_t *outputs, unsigned nval);
-	// bool updateOutputs(bool stop_motors, uint16_t outputs[MAX_ACTUATORS],
-	// 			   unsigned num_outputs, unsigned num_control_groups_updated);
 
 private:
 
@@ -168,8 +166,6 @@ private:
 	{
 		return (_armed.prearmed && !_armed.armed) || _armed.in_esc_calibration_mode;
 	}
-
-	unsigned motorTest();
 
 	void updateOutputSlewrateMultirotorMixer();
 	void updateOutputSlewrateSimplemixer();
@@ -195,11 +191,8 @@ private:
 	uORB::Subscription _armed_sub{ORB_ID(actuator_armed)};
 	uORB::SubscriptionCallbackWorkItem _control_subs[output_control_s::NUM_OUTPUT_CONTROL_GROUPS];
 
-	/** ------------------- New Control Allocation / Output Control Method ------------------------- */
-	// uORB::SubscriptionMultiArray<output_control_s> _output_control_subs{ORB_ID::output_control};
 	uint16_t _assigned_function[MAX_ACTUATORS] {};
 	const char *_output_module_prefix;
-	/** -------------------------------------------------------------------------------------------- */
 
 	uORB::PublicationMulti<actuator_outputs_s> _outputs_pub{ORB_ID(actuator_outputs)};
 	uORB::PublicationMulti<multirotor_motor_limits_s> _to_mixer_status{ORB_ID(multirotor_motor_limits)}; 	///< mixer status flags
@@ -223,13 +216,6 @@ private:
 	bool _wq_switched{false};
 	uint8_t _driver_instance{0}; ///< for boards that supports multiple outputs (e.g. PX4IO + FMU)
 	const uint8_t _max_num_outputs;
-
-	struct MotorTest {
-		uORB::Subscription test_motor_sub{ORB_ID(test_motor)};
-		bool in_test_mode{false};
-		hrt_abstime timeout{0};
-	};
-	MotorTest _motor_test;
 
 	OutputModuleInterface &_interface;
 

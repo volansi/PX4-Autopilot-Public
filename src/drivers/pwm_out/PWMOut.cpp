@@ -606,11 +606,11 @@ void PWMOut::Run()
 		/* update PWM status if armed or if disarmed PWM values are set */
 		pwm_on = _mixing_output.armed().armed || (_num_disarmed_set > 0) || _mixing_output.armed().in_esc_calibration_mode;
 
-	} else {
-		_output_control.update();
-
-		pwm_on = _armed_sub.get().armed || (_num_disarmed_set > 0);
 	}
+
+	_output_control.update();
+
+	pwm_on = _armed_sub.get().armed || (_num_disarmed_set > 0);
 
 	if (_pwm_on != pwm_on) {
 		_pwm_on = pwm_on;
@@ -635,10 +635,9 @@ void PWMOut::Run()
 		// check at end of cycle (updateSubscriptions() can potentially change to a different WorkQueue thread)
 		_mixing_output.updateSubscriptions(true, true);
 
-	} else {
-		/// TODO: Allow parallel execution with _mixing_output?
-		_output_control.updateSubscriptions(true, false);
 	}
+
+	_output_control.updateSubscriptions(true, false);
 
 	perf_end(_cycle_perf);
 }
@@ -651,28 +650,12 @@ void PWMOut::update_params()
 		update_pwm_rev_mask();
 		update_pwm_trims();
 
-	} else {
-		// OutputControl class handles all MIN / MAX / TRIM / etc. parameters
-		_output_control.updateParams();
-
 	}
+
+	// OutputControl class handles all MIN / MAX / TRIM / etc. parameters
+	_output_control.updateParams();
 
 	bool new_mode = (_p_pwm_aux_mode.get() == 0) ? true : false;
-
-	if (new_mode != _legacy_mixer_mode) {
-		PX4_INFO("Changing _legacy_mixer_mode to %d", new_mode);
-
-		if (_legacy_mixer_mode) {
-			// Disabling mixer mode
-			_mixing_output.unregister();
-			_mixing_output.resetMixer();
-
-		} else {
-			// Disabling new OutputControl mode
-			_output_control.unregister();
-			/// TODO: This is where we should initiate mixer loading, etc.
-		}
-	}
 
 	_legacy_mixer_mode = new_mode;
 }
@@ -814,7 +797,7 @@ int PWMOut::pwm_ioctl(file *filp, int cmd, unsigned long arg)
 			struct pwm_output_values *pwm = (struct pwm_output_values *)arg;
 
 			for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
-				if (_legacy_mixer_mode) {
+				if (_legacy_mixer_mode && _output_control.getAssignedFunction(i) == output_control_s::FUNCTION_MIXER) {
 					pwm->values[i] = _mixing_output.failsafeValue(i);
 
 				} else {
@@ -866,7 +849,7 @@ int PWMOut::pwm_ioctl(file *filp, int cmd, unsigned long arg)
 			_num_disarmed_set = 0;
 
 			for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
-				if (_legacy_mixer_mode) {
+				if (_legacy_mixer_mode && _output_control.getAssignedFunction(i) == output_control_s::FUNCTION_MIXER) {
 					if (_mixing_output.disarmedValue(i) > 0) {
 						_num_disarmed_set++;
 					}
@@ -886,7 +869,7 @@ int PWMOut::pwm_ioctl(file *filp, int cmd, unsigned long arg)
 			struct pwm_output_values *pwm = (struct pwm_output_values *)arg;
 
 			for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
-				if (_legacy_mixer_mode) {
+				if (_legacy_mixer_mode && _output_control.getAssignedFunction(i) == output_control_s::FUNCTION_MIXER) {
 					pwm->values[i] = _mixing_output.disarmedValue(i);
 
 				} else {
@@ -938,7 +921,7 @@ int PWMOut::pwm_ioctl(file *filp, int cmd, unsigned long arg)
 			struct pwm_output_values *pwm = (struct pwm_output_values *)arg;
 
 			for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
-				if (_legacy_mixer_mode) {
+				if (_legacy_mixer_mode && _output_control.getAssignedFunction(i) == output_control_s::FUNCTION_MIXER) {
 					pwm->values[i] = _mixing_output.minValue(i);
 
 				} else {
@@ -985,7 +968,7 @@ int PWMOut::pwm_ioctl(file *filp, int cmd, unsigned long arg)
 			struct pwm_output_values *pwm = (struct pwm_output_values *)arg;
 
 			for (unsigned i = 0; i < FMU_MAX_ACTUATORS; i++) {
-				if (_legacy_mixer_mode) {
+				if (_legacy_mixer_mode && _output_control.getAssignedFunction(i) == output_control_s::FUNCTION_MIXER) {
 					pwm->values[i] = _mixing_output.maxValue(i);
 
 				} else {
@@ -2177,11 +2160,10 @@ int PWMOut::print_status()
 		PX4_INFO("Legacy mixer mode selected");
 		_mixing_output.printStatus();
 
-	} else {
-		PX4_INFO("New output control mode selected");
-		_output_control.printStatus();
-
 	}
+
+	PX4_INFO("New output control mode:");
+	_output_control.printStatus();
 
 	return 0;
 }
