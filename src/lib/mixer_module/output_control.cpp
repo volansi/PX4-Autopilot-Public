@@ -70,12 +70,6 @@ _control_latency_perf(perf_alloc(PC_ELAPSED, "control latency"))
 	_armed.in_esc_calibration_mode = false;
 
 	px4_sem_init(&_lock, 0, 1);
-
-	// Enforce the existence of the test_motor topic, so we won't miss initial publications
-	test_motor_s test{};
-	uORB::Publication<test_motor_s> test_motor_pub{ORB_ID(test_motor)};
-	test_motor_pub.publish(test);
-	_motor_test.test_motor_sub.subscribe();
 }
 
 OutputControl::~OutputControl()
