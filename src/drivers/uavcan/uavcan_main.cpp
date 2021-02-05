@@ -767,6 +767,8 @@ UavcanNode::Run()
 		br->update();
 	}
 
+	_mixing_interface.mixingOutput().updateSubscriptions(true, false);
+
 	node_spin_once(); // expected to be non-blocking
 
 	// Check arming state

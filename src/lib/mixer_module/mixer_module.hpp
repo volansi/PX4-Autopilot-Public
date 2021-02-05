@@ -265,7 +265,8 @@ private:
 	output_limit_t _output_limit;
 
 	uORB::Subscription _armed_sub{ORB_ID(actuator_armed)};
-	uORB::SubscriptionCallbackWorkItem _control_subs[actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS + output_control_s::NUM_OUTPUT_CONTROL_GROUPS];
+	uORB::SubscriptionCallbackWorkItem _control_subs[actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS +
+									 output_control_s::NUM_OUTPUT_CONTROL_GROUPS];
 
 	uORB::PublicationMulti<actuator_outputs_s> _outputs_pub{ORB_ID(actuator_outputs)};
 	uORB::PublicationMulti<multirotor_motor_limits_s> _to_mixer_status{ORB_ID(multirotor_motor_limits)}; 	///< mixer status flags
