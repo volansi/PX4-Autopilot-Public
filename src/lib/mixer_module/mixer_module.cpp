@@ -41,12 +41,14 @@
 
 using namespace time_literals;
 
+static constexpr unsigned n_act = actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS;
+static constexpr unsigned n_out = output_control_s::NUM_OUTPUT_CONTROL_GROUPS;
+
 
 MixingOutput::MixingOutput(uint8_t max_num_outputs, OutputModuleInterface &interface,
 			   SchedulingPolicy scheduling_policy,
-			   bool support_esc_calibration, bool ramp_up, OutputControlInterface *ointerface)
+			   bool support_esc_calibration, bool ramp_up) //, OutputControlInterface *ointerface)
 	: ModuleParams(&interface),
-	  _ointerface(ointerface),
 	  _control_subs{
 	{&interface, ORB_ID(actuator_controls_0)},
 	{&interface, ORB_ID(actuator_controls_1)},
@@ -54,7 +56,13 @@ MixingOutput::MixingOutput(uint8_t max_num_outputs, OutputModuleInterface &inter
 	{&interface, ORB_ID(actuator_controls_3)},
 	{&interface, ORB_ID(actuator_controls_4)},
 	{&interface, ORB_ID(actuator_controls_5)},
+	{&interface, ORB_ID(output_control_ca)},
+	{&interface, ORB_ID(output_control_mixer)},
+	{&interface, ORB_ID(output_control_mavlink)},
+	{&interface, ORB_ID(output_control_internal)},
+
 },
+ _output_module_prefix(interface.get_param_prefix()),
 _scheduling_policy(scheduling_policy),
 _support_esc_calibration(support_esc_calibration),
 _max_num_outputs(max_num_outputs < MAX_ACTUATORS ? max_num_outputs : MAX_ACTUATORS),
@@ -93,14 +101,16 @@ void MixingOutput::printStatus() const
 	perf_print_counter(_control_latency_perf);
 	PX4_INFO("Switched to rate_ctrl work queue: %i", (int)_wq_switched);
 	PX4_INFO("Mixer loaded: %s", _mixers ? "yes" : "no");
+	PX4_INFO("Lockdown: %d, Manual Lockdown: %d", _armed.lockdown, _armed.manual_lockdown);
 	PX4_INFO("Driver instance: %i", _driver_instance);
+	PX4_INFO("Output module prefix: '%s'", _output_module_prefix);
 
 	PX4_INFO("Channel Configuration:");
 
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
 		int reordered_i = reorderedMotorIndex(i);
-		PX4_INFO("Channel %i: value: %i, failsafe: %d, disarmed: %d, min: %d, max: %d", reordered_i, _current_output_value[i],
-			 _failsafe_value[reordered_i], _disarmed_value[reordered_i], _min_value[reordered_i], _max_value[reordered_i]);
+		PX4_INFO("Channel %i: value: %i, failsafe: %d, disarmed: %d, min: %d, max: %d, Function: %d", reordered_i, _current_output_value[i],
+			 _failsafe_value[reordered_i], _disarmed_value[reordered_i], _min_value[reordered_i], _max_value[reordered_i], _assigned_function[i]);
 	}
 }
 
@@ -116,6 +126,48 @@ void MixingOutput::updateParams()
 
 		_mixers->set_thrust_factor(_param_thr_mdl_fac.get());
 		_mixers->set_airmode((Mixer::Airmode)_param_mc_airmode.get());
+	}
+
+	/** Update Function Mappings */
+
+	/// TODO: Do we need any sort of mode switch?  Disable use of mixers, perhaps?
+
+	updateParamValues("FUNC", _assigned_function);
+	updateParamValues("FAIL", _failsafe_value);
+	updateDisarmedValues();
+	updateMinValues();
+	updateMaxValues();
+	updateTrimValues();
+	updateReverseMask();
+
+	// Determine the output_control groups required to subscribe to
+
+	// First, clear all bits associated with the output_control groups
+	_groups_required &= (1 << n_act) - 1;
+	// PX4_INFO("Reset groups required: 0x%8x", _groups_required); /// DEBUGGING
+	// Next, use the "_FUNCx" parameters to determine what groups are required
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		int32_t func = _assigned_function[i];
+
+		if (func >= output_control_s::FUNCTION_CA0 &&
+		    func <= output_control_s::FUNCTION_CA15) {
+
+			_groups_required |= (1 << (n_act + 0));
+
+		} else if (func == output_control_s::FUNCTION_MIXER) {
+			/// TODO: The idea here was to refactor the mixer to publish to this topic...
+			// 	_groups_required |= (1 << (n_act + 1));
+
+		} else if (func >= output_control_s::FUNCTION_MAVLINK_SERVO0 &&
+			   func <= output_control_s::FUNCTION_MAVLINK_SERVO7) {
+
+			_groups_required |= (1 << (n_act + 2));
+			// PX4_INFO("Enabling group MAVLINK");
+
+		} else if (func != output_control_s::FUNCTION_NONE) {
+			_groups_required |= (1 << (n_act + 3));
+
+		}
 	}
 }
 
@@ -133,11 +185,12 @@ bool MixingOutput::updateSubscriptions(bool allow_wq_switch, bool limit_callback
 		unregister();
 		_interface.ScheduleClear();
 
-		// if subscribed to control group 0 or 1 then move to the rate_ctrl WQ
-		const bool sub_group_0 = (_groups_required & (1 << 0));
-		const bool sub_group_1 = (_groups_required & (1 << 1));
+		// if subscribed to control group 0 or 1, or control allocator, then move to the rate_ctrl WQ
+		const bool sub_group_0  = (_groups_required & (1 << 0));
+		const bool sub_group_1  = (_groups_required & (1 << 1));
+		const bool sub_group_ca = (_groups_required & (1 << n_act));
 
-		if (allow_wq_switch && !_wq_switched && (sub_group_0 || sub_group_1)) {
+		if (allow_wq_switch && !_wq_switched && (sub_group_0 || sub_group_1 || sub_group_ca)) {
 			if (_interface.ChangeWorkQeue(px4::wq_configurations::rate_ctrl)) {
 				// let the new WQ handle the subscribe update
 				_wq_switched = true;
@@ -147,34 +200,43 @@ bool MixingOutput::updateSubscriptions(bool allow_wq_switch, bool limit_callback
 			}
 		}
 
-		bool sub_group_0_callback_registered = false;
-		bool sub_group_1_callback_registered = false;
+		// bool sub_group_0_callback_registered  = false;
+		// bool sub_group_1_callback_registered  = false;
+		// bool sub_group_ca_callback_registered = false;
+
+		// if (limit_callbacks_to_primary) {
+		// 	// Reset all bits corresponding to non
+		// 	_groups_required |= ((1 << 0) | (1 << 1) | (1 << n_act));
+		// }
 
 		// register callback to all required actuator control groups
-		for (unsigned i = 0; i < actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS; i++) {
+		for (unsigned i = 0; i < n_act + n_out; i++) {
 
-			if (limit_callbacks_to_primary) {
-				// don't register additional callbacks if actuator_controls_0 or actuator_controls_1 are already registered
-				if ((i > 1) && (sub_group_0_callback_registered || sub_group_1_callback_registered)) {
-					break;
-				}
-			}
+			// if (limit_callbacks_to_primary) {
+			// 	// don't register additional callbacks if actuator_controls_0 or actuator_controls_1 are already registered
+			// 	if ((i > 1) && (sub_group_0_callback_registered || sub_group_1_callback_registered)) {
+			// 		break;
+			// 	}
+			// }
 
 			if (_groups_required & (1 << i)) {
 				if (_control_subs[i].registerCallback()) {
-					PX4_DEBUG("subscribed to actuator_controls_%d", i);
+					PX4_DEBUG("subscribed to [actuator/output]_controls_%d", i);
 
-					if (limit_callbacks_to_primary) {
-						if (i == 0) {
-							sub_group_0_callback_registered = true;
+					// if (limit_callbacks_to_primary) {
+					// 	if (i == 0) {
+					// 		sub_group_0_callback_registered = true;
 
-						} else if (i == 1) {
-							sub_group_1_callback_registered = true;
-						}
-					}
+					// 	} else if (i == 1) {
+					// 		sub_group_1_callback_registered = true;
+
+					// 	} else if (i == n_act) {
+					// 		sub_group_ca_callback_registered = true;
+					// 	}
+					// }
 
 				} else {
-					PX4_ERR("actuator_controls_%d register callback failed!", i);
+					PX4_ERR("[actuator/output]_controls_%d register callback failed!", i);
 				}
 			}
 		}
@@ -405,14 +467,51 @@ bool MixingOutput::update()
 
 	/* do mixing */
 	float outputs[MAX_ACTUATORS] {};
+	float mixer_outputs[MAX_ACTUATORS] {};
 
 	unsigned mixed_num_outputs = 0;
 
-	mixed_num_outputs = _mixers->mix(outputs, _max_num_outputs);
+	mixed_num_outputs = _mixers->mix(mixer_outputs, _max_num_outputs);
 
+	// Mask of all channels to be output; initialze to all mixed channels
+	unsigned mixed_outputs_mask = (1 << mixed_num_outputs) - 1;
+
+	/* get output controls for required topics */
+
+	for (unsigned grp = n_act; grp < n_act + n_out; grp++) {
+		if (_groups_subscribed & (1 << grp)) {
+			output_control_s controls;
+			if (_control_subs[grp].copy(&controls)) {
+				n_updates++;
+
+				for (uint8_t i = 0; i < controls.n_outputs; i++) {
+					auto func = controls.function[i];
+
+					if (func == 0) {
+						continue;
+					}
+
+					for (uint8_t j = 0; j < _max_num_outputs; j++) {
+						if (func == _assigned_function[j]) {
+							outputs[j] = controls.value[i];
+							mixed_outputs_mask |= (1 << j);
+							mixed_num_outputs = (j > mixed_num_outputs) ? j : mixed_num_outputs;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Copy over the mixer values
+	for (uint8_t i = 0; i < _max_num_outputs; i++) {
+		if (_assigned_function[i] == output_control_s::FUNCTION_MIXER) {
+			outputs[i] = mixer_outputs[i];
+		}
+	}
 
 	/* the output limit call takes care of out of band errors, NaN and constrains */
-	output_limit_calc(_throttle_armed, armNoThrottle(), mixed_num_outputs, _reverse_output_mask,
+	output_limit_calc_mask(_throttle_armed, armNoThrottle(), mixed_outputs_mask, _reverse_output_mask,
 			  _disarmed_value, _min_value, _max_value, outputs, _current_output_value, &_output_limit);
 
 	/* overwrite outputs in case of force_failsafe with _failsafe_value values */
@@ -437,7 +536,7 @@ bool MixingOutput::update()
 	reorderOutputs(_current_output_value);
 
 	/* now return the outputs to the driver */
-	if (_ointerface == nullptr) {
+	// if (_ointerface == nullptr) {
 		if (_interface.updateOutputs(stop_motors, _current_output_value, mixed_num_outputs, n_updates)) {
 			actuator_outputs_s actuator_outputs{};
 			setAndPublishActuatorOutputs(mixed_num_outputs, actuator_outputs);
@@ -446,9 +545,9 @@ bool MixingOutput::update()
 			updateLatencyPerfCounter(actuator_outputs);
 		}
 
-	} else {
-		_ointerface->mixingOutputCallback(_current_output_value, mixed_num_outputs);
-	}
+	// } else {
+	// 	_ointerface->mixingOutputCallback(_current_output_value, mixed_num_outputs);
+	// }
 
 	handleCommands();
 
@@ -694,4 +793,161 @@ int MixingOutput::loadMixerThreadSafe(const char *buf, unsigned len)
 	}
 
 	return _command.result;
+}
+
+
+void MixingOutput::updateParamValues(const char *type, uint16_t values[MAX_ACTUATORS])
+{
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the struct from parameters */
+		sprintf(pname, "%s_%s%d", _output_module_prefix, type, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t pval = 0;
+			param_get(param_h, &pval);
+			values[i] = (uint16_t)pval;
+			PX4_DEBUG("%s: %d", pname, values[i]);
+		}
+	}
+}
+
+void MixingOutput::updateFailsafeValues()
+{
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the struct from parameters */
+		sprintf(pname, "%s_FAIL%d", _output_module_prefix, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t pval = 0;
+			param_get(param_h, &pval);
+			_failsafe_value[i] = (uint16_t)pval;
+			PX4_DEBUG("%s: %d", pname, _failsafe_value[i]);
+		}
+	}
+}
+
+void MixingOutput::updateDisarmedValues()
+{
+	int32_t default_dis;
+	param_get(param_find("PWM_DISARMED"), &default_dis); /// TODO: This needs to be per-instance; i.e. different for UAVCAN
+
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the struct from parameters */
+		sprintf(pname, "%s_DIS%d", _output_module_prefix, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t pval = 0;
+			param_get(param_h, &pval);
+
+			if (pval < 0) {
+				// In the case of the default -1, use PWM_DISARMED
+				//PX4_DEBUG("%d: Defaulting to PWM_DISARMED %d", i, default_dis);
+				pval = default_dis;
+			}
+
+			_disarmed_value[i] = (uint16_t)pval;
+			PX4_DEBUG("%s: %d", pname, _disarmed_value[i]);
+		}
+	}
+}
+
+void MixingOutput::updateMinValues()
+{
+	int32_t default_min;
+	param_get(param_find("PWM_MIN"), &default_min); /// TODO: This needs to be per-instance; i.e. different for UAVCAN
+
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the struct from parameters */
+		sprintf(pname, "%s_MIN%d", _output_module_prefix, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t pval = 0;
+			param_get(param_h, &pval);
+
+			if (pval < 0) {
+				// In the case of the default -1, use PWM_MIN
+				PX4_DEBUG("%d: Defaulting to PWM_MIN %d", i, default_min);
+				pval = default_min;
+			}
+
+			_min_value[i] = (uint16_t)pval;
+			PX4_DEBUG("%s: %d", pname, _min_value[i]);
+		}
+	}
+}
+
+void MixingOutput::updateMaxValues()
+{
+	int32_t default_max;
+	param_get(param_find("PWM_MAX"), &default_max); /// TODO: This needs to be per-instance; i.e. different for UAVCAN
+
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the struct from parameters */
+		sprintf(pname, "%s_MAX%d", _output_module_prefix, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t pval = 0;
+			param_get(param_h, &pval);
+
+			if (pval < 0) {
+				// In the case of the default -1, use PWM_MAX
+				pval = default_max;
+			}
+
+			_max_value[i] = (uint16_t)pval;
+			PX4_DEBUG("%s: %d", pname, _max_value[i]);
+		}
+	}
+}
+
+void MixingOutput::updateTrimValues()
+{
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the struct from parameters */
+		sprintf(pname, "%s_TRIM%d", _output_module_prefix, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			float pval = 0.0f;
+			param_get(param_h, &pval);
+			_trim_value[i] = (int16_t)(10000 * pval);
+			PX4_DEBUG("%s: %d", pname, _trim_value[i]);
+		}
+	}
+}
+
+void MixingOutput::updateReverseMask()
+{
+	_reverse_output_mask = 0;
+
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		char pname[16];
+
+		/* fill the channel reverse mask from parameters */
+		sprintf(pname, "%s_REV%d", _output_module_prefix, i + 1);
+		param_t param_h = param_find(pname);
+
+		if (param_h != PARAM_INVALID) {
+			int32_t ival = 0;
+			param_get(param_h, &ival);
+			_reverse_output_mask |= ((int16_t)(ival != 0)) << i;
+		}
+	}
 }
