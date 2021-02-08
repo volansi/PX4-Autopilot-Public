@@ -103,13 +103,15 @@ void MixingOutput::printStatus() const
 	PX4_INFO("Lockdown: %d, Manual Lockdown: %d", _armed.lockdown, _armed.manual_lockdown);
 	PX4_INFO("Driver instance: %i", _driver_instance);
 	PX4_INFO("Output module prefix: '%s'", _output_module_prefix);
+	PX4_INFO("Groups required: %d (0x%08x), Groups subscribed: 0x%08x", _groups_required, _groups_required,
+		 _groups_subscribed);
 
 	PX4_INFO("Channel Configuration:");
 
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
 		int reordered_i = reorderedMotorIndex(i);
-		PX4_INFO("Channel %i: value: %i, failsafe: %d, disarmed: %d, min: %d, max: %d, Function: %d", reordered_i,
-			 _current_output_value[i],
+		PX4_INFO("Channel %i: input: %f, value: %i, failsafe: %d, disarmed: %d, min: %d, max: %d, Function: %d", reordered_i,
+			 (double)_current_inputs[i], _current_output_value[i],
 			 _failsafe_value[reordered_i], _disarmed_value[reordered_i], _min_value[reordered_i], _max_value[reordered_i],
 			 _assigned_function[i]);
 	}
@@ -146,7 +148,6 @@ void MixingOutput::updateParams()
 	// First, clear all bits associated with the output_control groups
 	_groups_required &= (1 << n_act) - 1;
 
-	// PX4_INFO("Reset groups required: 0x%8x", _groups_required); /// DEBUGGING
 	// Next, use the "_FUNCx" parameters to determine what groups are required
 	for (unsigned i = 0; i < _max_num_outputs; i++) {
 		int32_t func = _assigned_function[i];
@@ -467,7 +468,6 @@ bool MixingOutput::update()
 	}
 
 	/* do mixing */
-	float outputs[MAX_ACTUATORS] {};
 	float mixer_outputs[MAX_ACTUATORS] {};
 
 	unsigned mixed_num_outputs = 0;
@@ -498,7 +498,7 @@ bool MixingOutput::update()
 					// Map the current control function to the correct output(s)
 					for (uint8_t j = 0; j < _max_num_outputs; j++) {
 						if (func == _assigned_function[j]) {
-							outputs[j] = controls.value[i];
+							_current_inputs[j] = controls.value[i];
 							mixed_outputs_mask |= (1 << j);
 							mixed_num_outputs = (j > mixed_num_outputs) ? j : mixed_num_outputs;
 						}
@@ -511,13 +511,13 @@ bool MixingOutput::update()
 	// Copy over the mixer values
 	for (uint8_t i = 0; i < _max_num_outputs; i++) {
 		if (_assigned_function[i] == output_control_s::FUNCTION_MIXER) {
-			outputs[i] = mixer_outputs[i];
+			_current_inputs[i] = mixer_outputs[i];
 		}
 	}
 
 	/* the output limit call takes care of out of band errors, NaN and constrains */
-	output_limit_calc_mask(_throttle_armed, armNoThrottle(), mixed_outputs_mask, _reverse_output_mask,
-			       _disarmed_value, _min_value, _max_value, outputs, _current_output_value, &_output_limit);
+	output_limit_calc(_throttle_armed, armNoThrottle(), _max_num_outputs, _reverse_output_mask,
+			  _disarmed_value, _min_value, _max_value, _current_inputs, _current_output_value, &_output_limit);
 
 	/* overwrite outputs in case of force_failsafe with _failsafe_value values */
 	if (_armed.force_failsafe) {
@@ -539,6 +539,14 @@ bool MixingOutput::update()
 
 	/* apply _param_mot_ordering */
 	reorderOutputs(_current_output_value);
+
+	/* Zero out any outputs which do not have a function assigned */
+	for (unsigned i = 0; i < _max_num_outputs; i++) {
+		if (_assigned_function[i] == output_control_s::FUNCTION_NONE) {
+			/// TODO: Are there any sitatuations where we would want a different "off" value?
+			_current_output_value[i] = 0;
+		}
+	}
 
 	/* now return the outputs to the driver */
 	if (_interface.updateOutputs(stop_motors, _current_output_value, mixed_num_outputs, n_updates)) {

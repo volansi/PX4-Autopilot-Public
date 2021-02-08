@@ -194,12 +194,7 @@ private:
 
 	unsigned	_num_disarmed_set{0};
 
-	bool		_legacy_mixer_mode{true};
-
-	uint16_t	_reverse_pwm_mask{0}; // Local version of legacy mixer variable
-	int16_t		_pwm_trim_values[FMU_MAX_ACTUATORS] {}; // Local version of legacy mixer variable
-	uint16_t	_output_values[FMU_MAX_ACTUATORS]; // The actual values output to the pins
-	void update_outputs();
+	bool		_legacy_mixer_mode{true}; ///< Mode switch on mixer-file vs. ControlAllocator output
 
 	perf_counter_t	_cycle_perf;
 	perf_counter_t	_interval_perf;

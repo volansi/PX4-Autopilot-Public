@@ -260,6 +260,7 @@ private:
 	uint16_t _min_value[MAX_ACTUATORS] {};
 	uint16_t _max_value[MAX_ACTUATORS] {};
 	uint16_t _trim_value[MAX_ACTUATORS] {};
+	float    _current_inputs[MAX_ACTUATORS] {}; ///< current set of inputs (controller or command outputs)
 	uint16_t _current_output_value[MAX_ACTUATORS] {}; ///< current output values (reordered)
 	uint16_t _reverse_output_mask{0}; ///< reverses the interval [min, max] -> [max, min], NOT motor direction
 	output_limit_t _output_limit;
