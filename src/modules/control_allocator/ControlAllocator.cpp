@@ -390,10 +390,12 @@ ControlAllocator::publish_actuator_setpoint()
 
 	outputs.timestamp = vehicle_actuator_setpoint.timestamp;
 	outputs.timestamp_sample = _timestamp_sample;
+	outputs.n_outputs = 0;
 
 	for (unsigned i = 0; i < NUM_ACTUATORS; i++) {
 		outputs.function[i] = output_control_s::FUNCTION_CA0 + i;
 		outputs.value[i] = vehicle_actuator_setpoint.actuator[i];
+		outputs.n_outputs++;
 	}
 
 	_output_control_pub.publish(outputs);

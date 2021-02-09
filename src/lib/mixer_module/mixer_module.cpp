@@ -500,7 +500,7 @@ bool MixingOutput::update()
 						if (func == _assigned_function[j]) {
 							_current_inputs[j] = controls.value[i];
 							mixed_outputs_mask |= (1 << j);
-							mixed_num_outputs = (j > mixed_num_outputs) ? j : mixed_num_outputs;
+							mixed_num_outputs = (j > mixed_num_outputs) ? (j + 1) : mixed_num_outputs;
 						}
 					}
 				}
