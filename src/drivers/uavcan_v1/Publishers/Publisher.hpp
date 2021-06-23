@@ -80,7 +80,8 @@ public:
 		// Set _port_id from _uavcan_param
 		uavcan_register_Value_1_0 value;
 		_param_manager.GetParamByName(uavcan_param, value);
-		int32_t new_id = value.integer32.value.elements[0];
+		// int32_t new_id = value.integer32.value.elements[0];
+		int32_t new_id = value.natural16.value.elements[0];
 
 		// Allow, for example, a default PX4 param value of '-1' to disable publication
 		if (!isValidPortId(new_id)) {
@@ -98,6 +99,7 @@ public:
 				PX4_INFO("Enabling subject %s.%d on port %d", _subject_name, _instance, _port_id);
 			}
 		}
+		PX4_INFO("Update Param %s with port id set to %d",uavcan_param, _port_id);
 	};
 
 	void printInfo()
