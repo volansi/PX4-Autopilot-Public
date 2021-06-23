@@ -278,27 +278,19 @@ void UavcanNode::transmit()
 
 		bool drop_frame = false;
 
-		if ( is_first_run || !is_timed_out ) {
+		if (is_first_run || !is_timed_out) {
 			// Send the frame. Redundant interfaces may be used here.
 			const int tx_res = _can_interface->transmit(*txf);
 
 			if (tx_res < 0) {
-				// Failure - drop the frame and report
+				// Failure - report and drop the frame
 				drop_frame = true;
-				// canardTxPop(&_canard_instance);
-
-				// // Deallocate the dynamic memory afterwards.
-				// _canard_instance.memory_free(&_canard_instance, (CanardFrame *)txf);
 				PX4_ERR("Transmit error %d, frame dropped, errno '%s'", tx_res, strerror(errno));
 
 			} else if (tx_res > 0) {
+				// Success - just drop the frame
 				drop_frame = true;
-				// // Success - just drop the frame
-				// canardTxPop(&_canard_instance);
-
-				// // Deallocate the dynamic memory afterwards.
-				// _canard_instance.memory_free(&_canard_instance, (CanardFrame *)txf);
-
+				PX4_INFO("Sent frame");
 			} else {
 				// Timeout - just exit and try again later
 				break;
@@ -308,7 +300,7 @@ void UavcanNode::transmit()
 			drop_frame = true;
 		}
 
-		if(drop_frame){
+		if (drop_frame) {
 			// Drop the frame
 			canardTxPop(&_canard_instance);
 
