@@ -267,8 +267,25 @@ void UavcanNode::Run()
 
 void UavcanNode::transmit()
 {
+	// #define CAN1_TX_DEBUG
 	// Look at the top of the TX queue.
-	for (const CanardFrame *txf = nullptr; (txf = canardTxPeek(&_canard_instance)) != nullptr;) {
+
+	const CanardFrame *txf = canardTxPeek(&_canard_instance);
+	bool is_more_to_tx = txf != nullptr;
+	int bail_counter = 0;
+
+	printf("[tx] ");
+
+	// for (const CanardFrame *txf = nullptr; (txf = canardTxPeek(&_canard_instance)) != nullptr;) {
+	while(is_more_to_tx) {
+		// Get top of queue
+		txf = canardTxPeek(&_canard_instance);
+		// Nothing there, bail
+		if( txf == nullptr){
+			printf("1");
+			break;
+		}
+
 		// Attempt transmission only if the frame is not yet timed out while waiting in the TX queue.
 		// Otherwise just drop it and move on to the next one.
 		hrt_abstime now = hrt_absolute_time();
@@ -290,13 +307,23 @@ void UavcanNode::transmit()
 			} else if (tx_res > 0) {
 				// Success - just drop the frame
 				drop_frame = true;
-				PX4_INFO("Sent frame");
+				printf("2");
+				#ifdef CAN1_TX_DEBUG
+				printf("[tx] Sent: ADDR:0x%08x ID:0x%08x Now: %llu, Deadline: %llu \n", txf, txf->extended_can_id, now, deadline);
+				#endif
 			} else {
 				// Timeout - just exit and try again later
-				break;
+				#ifdef CAN1_TX_DEBUG
+				printf("[tx] Wait: ADDR:0x%08x ID:0x%08x Now: %llu, Deadline: %llu \n", txf, txf->extended_can_id, now, deadline);
+				#endif
+				printf("*");
+				// Can't send for some reason, bail
+				if(bail_counter++ > 50)
+					break;
 			}
 		} else if (is_timed_out) {
-			PX4_INFO("Timeout, dropping frame");
+			printf("3");
+			// printf("[tx] Tout: ADDR:0x%08x ID:0x%08x Now: %llu, Deadline: %llu \n", txf, txf->extended_can_id, now, deadline);
 			drop_frame = true;
 		}
 
@@ -308,6 +335,7 @@ void UavcanNode::transmit()
 			_canard_instance.memory_free(&_canard_instance, (CanardFrame *)txf);
 		}
 	}
+	printf("\n");
 }
 
 void UavcanNode::print_info()

@@ -162,6 +162,15 @@ PARAM_DEFINE_INT32(UCAN1_ESC_PUB, -1);
 PARAM_DEFINE_INT32(UCAN1_GPS_PUB, -1);
 
 /**
+ * UAVCAN v1 GYRO port ID.
+ *
+ * @min -1
+ * @max 6143
+ * @group UAVCAN v1
+ */
+PARAM_DEFINE_INT32(UCAN1_GYRO_PUB, -1);
+
+/**
  * UAVCAN v1 Servo port ID.
  *
  * @min -1
