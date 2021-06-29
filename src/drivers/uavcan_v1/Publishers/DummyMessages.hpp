@@ -50,7 +50,53 @@
 
 #include <uORB/topics/sensor_gyro.h>
 
-class UavcanDummyPublisherSmall : public UavcanPublisher
+class UavcanDummyPublisherGeneric
+{
+	protected:
+	unsigned long _counter {0};
+	float _value = {0};
+	unsigned long _rate {100};
+
+	int messages_this_tick(const char* param_name) {
+		int result = -1;
+		// update the params
+		param_get(param_find(param_name), &_value);
+
+		_counter++;
+
+		// Must be greater than zero and below a high number
+		if(_value<=0 || _value>2000)
+			return result;
+
+		// Convert to target value
+		float target = (float)_rate / _value;
+		if(target < (float)1.0) {
+			// Target is less than 1 meaning more than one
+			// message per tick, invert it
+			result = floor((float)1.0/target);
+		} else {
+			// Less than 1 message per tick, is this the tick
+			// to send a message?
+			result = _counter%(int)floor(target) == 0;
+		}
+		// PX4_INFO("Counter %lu Value %f [%d] Result %d", _counter,  (double)_value, target < (float)1.0, result );
+		return result;
+	}
+
+	int get_messages_to_tx(uint16_t port_id, const char* param_name){
+		int msg_to_send = -1;
+		if (port_id != CANARD_PORT_ID_UNSET && port_id != 0) { //FIXME either make default param UNSET or handle 0 in base class
+			msg_to_send = messages_this_tick(param_name);
+			if(msg_to_send <= 0){
+				msg_to_send = -1;
+			}
+		}
+		return msg_to_send;
+	}
+
+};
+
+class UavcanDummyPublisherSmall : public UavcanPublisher, UavcanDummyPublisherGeneric
 {
 public:
 	UavcanDummyPublisherSmall(CanardInstance &ins, UavcanParamManager &pmgr, uint8_t instance = 0) :
@@ -90,58 +136,29 @@ public:
 		}
 	}
 
-	int messages_this_tick() {
-		// update the params
-		param_get(param_find("UCAN1_DPUB_SM_HZ"), &_value);
-
-		_counter++;
-
-		// Must be greater than zero
-		if(_value<=0)
-			return -1;
-
-		// Convert to target value
-		float target = (float)_rate / _value;
-		if(target < (float)1.0){
-			// Target is less than 1 meaning more than one
-			// message per tick, invert it
-			int result = floor((float)1.0/target);
-			// PX4_INFO("Index %d Counter %lu Value %f Result %d", index, _counter[index],  (double)_values[index], result);
-			return result;
-		}
-		// Less than 1 message per tick, is this the tick
-		// to send a message?
-		int result = _counter%(int)floor(target) == 0;
-		// PX4_INFO("Index %d Counter %lu Value %f Result %d", index, _counter[index],  (double)_values[index], result );
-		return result;
-	}
-
 	// Update the uORB Subscription and broadcast a UAVCAN message
 	virtual void update() override
 	{
-		if (_port_id != CANARD_PORT_ID_UNSET && _port_id != 0) { //FIXME either make default param UNSET or handle 0 in base class
-			int msg_to_send = messages_this_tick();
-			if(msg_to_send <= 0){
-				return;
-			}
-			for(int i=0;i<msg_to_send;i++){
-				gen_message();
-			}
+		int n = get_messages_to_tx(_port_id,"UCAN1_DPUB_SM_HZ");
+
+		if(n <= 0){
+			return;
 		}
+
+		for(int i=0;i<n;i++){
+			gen_message();
+		}
+
 	};
 
 private:
 
 	uORB::Subscription _gyro_sub{ORB_ID(sensor_gyro)};
 	CanardTransferID _transfer_id_2 {0};
-	unsigned long _counter {0};
-	float _value = {0};
-	unsigned long _rate {100};
 };
 
 
-
-class UavcanDummyPublisherLrg : public UavcanPublisher
+class UavcanDummyPublisherLrg : public UavcanPublisher, UavcanDummyPublisherGeneric
 {
 public:
 	UavcanDummyPublisherLrg(CanardInstance &ins, UavcanParamManager &pmgr, uint8_t instance = 0) :
@@ -177,57 +194,28 @@ public:
 		}
 	}
 
-	int messages_this_tick() {
-		// update the params
-		param_get(param_find("UCAN1_DPUB_LG_HZ"), &_value);
-
-		_counter++;
-
-		// Must be greater than zero
-		if(_value<=0)
-			return -1;
-
-		// Convert to target value
-		float target = (float)_rate / _value;
-		if(target < (float)1.0){
-			// Target is less than 1 meaning more than one
-			// message per tick, invert it
-			int result = floor((float)1.0/target);
-			// PX4_INFO("Index %d Counter %lu Value %f Result %d", index, _counter[index],  (double)_values[index], result);
-			return result;
-		}
-		// Less than 1 message per tick, is this the tick
-		// to send a message?
-		int result = _counter%(int)floor(target) == 0;
-		// PX4_INFO("Index %d Counter %lu Value %f Result %d", index, _counter[index],  (double)_values[index], result );
-		return result;
-	}
-
 	// Update the uORB Subscription and broadcast a UAVCAN message
 	virtual void update() override
 	{
-		if (_port_id != CANARD_PORT_ID_UNSET && _port_id != 0) { //FIXME either make default param UNSET or handle 0 in base class
-			int msg_to_send = messages_this_tick();
-			if(msg_to_send <= 0){
-				return;
-			}
-			for(int i=0;i<msg_to_send;i++){
-				gen_message();
-			}
+		int n = get_messages_to_tx(_port_id,"UCAN1_DPUB_LG_HZ");
+
+		if(n <= 0){
+			return;
 		}
+
+		for(int i=0;i<n;i++){
+			gen_message();
+		}
+
 	};
 
 private:
 
-	uORB::Subscription _gyro_sub{ORB_ID(sensor_gyro)};
 	CanardTransferID _transfer_id_2 {0};
-	unsigned long _counter {0};
-	float _value = {0};
-	unsigned long _rate {100};
 };
 
 
-class UavcanDummyPublisherMed : public UavcanPublisher
+class UavcanDummyPublisherMed : public UavcanPublisher, UavcanDummyPublisherGeneric
 {
 public:
 	UavcanDummyPublisherMed(CanardInstance &ins, UavcanParamManager &pmgr, uint8_t instance = 0) :
@@ -264,51 +252,22 @@ public:
 		}
 	}
 
-	int messages_this_tick() {
-		// update the params
-		param_get(param_find("UCAN1_DPUB_MD_HZ"), &_value);
-
-		_counter++;
-
-		// Must be greater than zero
-		if(_value<=0)
-			return -1;
-
-		// Convert to target value
-		float target = (float)_rate / _value;
-		if(target < (float)1.0){
-			// Target is less than 1 meaning more than one
-			// message per tick, invert it
-			int result = floor((float)1.0/target);
-			// PX4_INFO("Index %d Counter %lu Value %f Result %d", index, _counter[index],  (double)_values[index], result);
-			return result;
-		}
-		// Less than 1 message per tick, is this the tick
-		// to send a message?
-		int result = _counter%(int)floor(target) == 0;
-		// PX4_INFO("Index %d Counter %lu Value %f Result %d", index, _counter[index],  (double)_values[index], result );
-		return result;
-	}
-
-	// Update the uORB Subscription and broadcast a UAVCAN message
+		// Update the uORB Subscription and broadcast a UAVCAN message
 	virtual void update() override
 	{
-		if (_port_id != CANARD_PORT_ID_UNSET && _port_id != 0) { //FIXME either make default param UNSET or handle 0 in base class
-			int msg_to_send = messages_this_tick();
-			if(msg_to_send <= 0){
-				return;
-			}
-			for(int i=0;i<msg_to_send;i++){
-				gen_message();
-			}
+		int n = get_messages_to_tx(_port_id,"UCAN1_DPUB_MD_HZ");
+
+		if(n <= 0){
+			return;
 		}
+
+		for(int i=0;i<n;i++){
+			gen_message();
+		}
+
 	};
 
 private:
 
-	uORB::Subscription _gyro_sub{ORB_ID(sensor_gyro)};
 	CanardTransferID _transfer_id_2 {0};
-	unsigned long _counter {0};
-	float _value = {0};
-	unsigned long _rate {100};
 };

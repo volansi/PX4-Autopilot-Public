@@ -79,27 +79,22 @@ public:
 
 		// Set _port_id from _uavcan_param
 		uavcan_register_Value_1_0 value;
-		_param_manager.GetParamByName(uavcan_param, value);
-		// int32_t new_id = value.integer32.value.elements[0];
-		int32_t new_id = value.natural16.value.elements[0];
 
-		// Allow, for example, a default PX4 param value of '-1' to disable publication
-		if (!isValidPortId(new_id)) {
-			// but always use the standard 'unset' value for comparison
-			new_id = CANARD_PORT_ID_UNSET;
-		}
+		if (_param_manager.GetParamByName(uavcan_param, value)) {
+			uint16_t new_id = value.natural16.value.elements[0];
 
-		if (_port_id != new_id) {
-			if (new_id == CANARD_PORT_ID_UNSET) {
-				PX4_INFO("Disabling publication of subject %s.%d", _subject_name, _instance);
-				_port_id = CANARD_PORT_ID_UNSET;
+			if (_port_id != new_id) {
+				if (new_id == CANARD_PORT_ID_UNSET) {
+					PX4_INFO("Disabling publication of subject %s.%d", _subject_name, _instance);
+					_port_id = CANARD_PORT_ID_UNSET;
 
-			} else {
-				_port_id = (CanardPortID)new_id;
-				PX4_INFO("Enabling subject %s.%d on port %d", _subject_name, _instance, _port_id);
+				} else {
+					_port_id = (CanardPortID)new_id;
+					PX4_INFO("Enabling subject %s.%d on port %d", _subject_name, _instance, _port_id);
+				}
 			}
+			PX4_INFO("Update Param %s with port id set to %d",uavcan_param, _port_id);
 		}
-		PX4_INFO("Update Param %s with port id set to %d",uavcan_param, _port_id);
 	};
 
 	void printInfo()

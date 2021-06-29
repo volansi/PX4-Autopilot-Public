@@ -63,6 +63,7 @@ class CAN_Test:
 		self.ser = ser
 		self.test_index = 0
 		self.__expand_tests()
+		self.init = True
 
 	def test_quantity(self):
 		total_tests = 0
@@ -94,6 +95,21 @@ class CAN_Test:
 				self.tt.append(tc)
 
 	def clean_slate(self, wait=0):
+		param_name = "uav_test_params"
+		if self.init:
+			write_to_serial(self.ser,'param set UCAN1_ESC_PUB 0')
+			write_to_serial(self.ser,'param set UCAN1_GPS_PUB 0')
+			write_to_serial(self.ser,'param set UCAN1_D_PUB_SM 0')
+			write_to_serial(self.ser,'param set UCAN1_D_PUB_MD 0')
+			write_to_serial(self.ser,'param set UCAN1_D_PUB_LG 0')
+			write_to_serial(self.ser,'param set UCAN1_DPUB_SM_HZ -1')
+			write_to_serial(self.ser,'param set UCAN1_DPUB_MD_HZ -1')
+			write_to_serial(self.ser,'param set UCAN1_DPUB_LG_HZ -1')
+			time.sleep(1)
+			write_to_serial(self.ser,'param save ')# + param_name)
+			time.sleep(1)
+			self.init = True
+
 		write_to_serial(self.ser,'reboot')
 		time.sleep(wait)
 
@@ -108,7 +124,7 @@ class CAN_Test:
 			print("Running " + t.test_name)
 			self.clean_slate(wait=10)
 			self.apply_test_settings(t)
-			time.sleep(60)
+			time.sleep(30)
 
 
 	def __str__(self):
@@ -124,7 +140,7 @@ class CAN_Test:
 # Each entry follow this format: [Test_Name,[[TEST_1]..[TEST_N]]]
 test_grid = \
 	[
-		['TEST_1',[['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[1,100,200,400], 12]]],
+		['TEST_1',[['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[1, 50, 100, 200, 400], 12]]],
 		# ['TEST_2',[['UCAN1_D_PUB_MD',23,'UCAN1_DPUB_MD_HZ',[1,100,200,400], 24]]],
 		# ['TEST_3',[['UCAN1_D_PUB_LG',24,'UCAN1_DPUB_LG_HZ',[1,100,200,400], 58]]],
 		# ['COMPOSITE_TEST_1',[
