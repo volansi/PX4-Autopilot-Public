@@ -273,8 +273,9 @@ void UavcanNode::transmit()
 	const CanardFrame *txf = canardTxPeek(&_canard_instance);
 	bool is_more_to_tx = txf != nullptr;
 	int bail_counter = 0;
-
+	#ifdef CAN1_TX_DEBUG
 	printf("[tx] ");
+	#endif
 
 	// for (const CanardFrame *txf = nullptr; (txf = canardTxPeek(&_canard_instance)) != nullptr;) {
 	while(is_more_to_tx) {
@@ -282,7 +283,9 @@ void UavcanNode::transmit()
 		txf = canardTxPeek(&_canard_instance);
 		// Nothing there, bail
 		if( txf == nullptr){
+			#ifdef CAN1_TX_DEBUG
 			printf("1");
+			#endif
 			break;
 		}
 
@@ -307,23 +310,26 @@ void UavcanNode::transmit()
 			} else if (tx_res > 0) {
 				// Success - just drop the frame
 				drop_frame = true;
-				printf("2");
+
 				#ifdef CAN1_TX_DEBUG
-				printf("[tx] Sent: ADDR:0x%08x ID:0x%08x Now: %llu, Deadline: %llu \n", txf, txf->extended_can_id, now, deadline);
+				printf("2");
 				#endif
 			} else {
 				// Timeout - just exit and try again later
 				#ifdef CAN1_TX_DEBUG
-				printf("[tx] Wait: ADDR:0x%08x ID:0x%08x Now: %llu, Deadline: %llu \n", txf, txf->extended_can_id, now, deadline);
-				#endif
 				printf("*");
+				#endif
+
 				// Can't send for some reason, bail
 				if(bail_counter++ > 50)
 					break;
 			}
 		} else if (is_timed_out) {
+			#ifdef CAN1_TX_DEBUG
 			printf("3");
-			// printf("[tx] Tout: ADDR:0x%08x ID:0x%08x Now: %llu, Deadline: %llu \n", txf, txf->extended_can_id, now, deadline);
+			#else
+			printf("D");
+			#endif
 			drop_frame = true;
 		}
 
@@ -335,7 +341,9 @@ void UavcanNode::transmit()
 			_canard_instance.memory_free(&_canard_instance, (CanardFrame *)txf);
 		}
 	}
+	#ifdef CAN1_TX_DEBUG
 	printf("\n");
+	#endif
 }
 
 void UavcanNode::print_info()

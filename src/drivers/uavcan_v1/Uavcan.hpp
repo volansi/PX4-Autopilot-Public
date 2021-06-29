@@ -60,6 +60,7 @@
 #include "Publishers/Publisher.hpp"
 #include "Publishers/Gnss.hpp"
 #include "Publishers/Gyro.hpp"
+#include "Publishers/DummyMessages.hpp"
 
 #include "NodeManager.hpp"
 
@@ -186,11 +187,15 @@ private:
 
 	UavcanGyroPublisher _gyro_pub {_canard_instance, _param_manager};
 
+	UavcanDummyPublisherSmall _dummy_pub_sm {_canard_instance, _param_manager};
+	UavcanDummyPublisherMed _dummy_pub_md {_canard_instance, _param_manager};
+	UavcanDummyPublisherLrg _dummy_pub_lg {_canard_instance, _param_manager};
+
 	UavcanEscController _esc_controller {_canard_instance, _param_manager};
 
 	// Publication objects: Any object used to bridge a uORB message to a UAVCAN message
 	/// TODO: For some service implementations, it makes sense to have them be both Publishers and Subscribers
-	UavcanPublisher *_publishers[3] {&_gps_pub, &_esc_controller, &_gyro_pub};
+	UavcanPublisher *_publishers[6] {&_gps_pub, &_esc_controller, &_gyro_pub, &_dummy_pub_sm, &_dummy_pub_md, &_dummy_pub_lg};
 
 	UavcanMixingInterface _mixing_output {_node_mutex, _esc_controller};
 

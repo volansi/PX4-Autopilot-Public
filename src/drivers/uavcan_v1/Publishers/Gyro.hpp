@@ -89,46 +89,11 @@ public:
 				++_transfer_id;  // The transfer-ID shall be incremented after every transmission on this subject.
 				result = canardTxPush(&_canard_instance, &transfer);
 			}
-
-			// /// TODO: Also publish DilutionOfPrecision, ...?
-			// reg_drone_service_gnss_DilutionOfPrecision_0_1 dop {
-			// 	.geometric = NAN,
-			// 	.position = NAN,
-			// 	.horizontal = gps.hdop,
-			// 	.vertical = gps.vdop,
-			// 	.time = NAN,
-			// 	.northing = NAN,
-			// 	.easting = NAN,
-			// };
-
-			// uint8_t dop_payload_buffer[reg_drone_service_gnss_DilutionOfPrecision_0_1_SERIALIZATION_BUFFER_SIZE_BYTES_];
-
-			// CanardPortID _port_id_2 = static_cast<CanardPortID>((uint16_t)_port_id + 1U);
-
-			// CanardTransfer transfer2 = {
-			// 	.timestamp_usec = hrt_absolute_time() + PUBLISHER_DEFAULT_TIMEOUT_USEC,
-			// 	.priority       = CanardPriorityNominal,
-			// 	.transfer_kind  = CanardTransferKindMessage,
-			// 	.port_id        = _port_id_2, // This is the subject-ID.
-			// 	.remote_node_id = CANARD_NODE_ID_UNSET,
-			// 	.transfer_id    = _transfer_id_2,
-			// 	.payload_size   = reg_drone_service_gnss_DilutionOfPrecision_0_1_SERIALIZATION_BUFFER_SIZE_BYTES_,
-			// 	.payload        = &dop_payload_buffer,
-			// };
-
-			// result = reg_drone_service_gnss_DilutionOfPrecision_0_1_serialize_(&dop, dop_payload_buffer, &transfer2.payload_size);
-
-			// if (result == 0) {
-			// 	// set the data ready in the buffer and chop if needed
-			// 	++_transfer_id_2;  // The transfer-ID shall be incremented after every transmission on this subject.
-			// 	result = canardTxPush(&_canard_instance, &transfer2);
-			// }
 		}
 	};
 
 private:
 
-	/// TODO: Allow >1 instance
 	uORB::Subscription _gyro_sub{ORB_ID(sensor_gyro)};
 	CanardTransferID _transfer_id_2 {0};
 };
