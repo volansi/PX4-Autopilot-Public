@@ -310,7 +310,7 @@ void UavcanNode::transmit()
 			} else if (tx_res > 0) {
 				// Success - just drop the frame
 				drop_frame = true;
-
+				printf("(");
 				#ifdef CAN1_TX_DEBUG
 				printf("2");
 				#endif
@@ -328,7 +328,7 @@ void UavcanNode::transmit()
 			#ifdef CAN1_TX_DEBUG
 			printf("3");
 			#else
-			printf("D");
+			printf("#");
 			#endif
 			drop_frame = true;
 		}

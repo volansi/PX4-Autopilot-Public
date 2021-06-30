@@ -42,13 +42,13 @@
 #pragma once
 
 // DS-15 Specification Messages
-#include <reg/drone/physics/kinematics/rotation/Planar_0_1.h>
-#include <reg/drone/physics/kinematics/cartesian/Pose_0_1.h>
-#include <reg/drone/service/battery/Parameters_0_3.h>
+#include <dummy_data_types/reg/small_1_0.h>
+#include <dummy_data_types/reg/medium_1_0.h>
+#include <dummy_data_types/reg/large_1_0.h>
+#include <dummy_data_types/reg/vlarge_1_0.h>
+#include <dummy_data_types/reg/vvlarge_1_0.h>
 
 #include "Publisher.hpp"
-
-#include <uORB/topics/sensor_gyro.h>
 
 class UavcanDummyPublisherGeneric
 {
@@ -56,6 +56,7 @@ class UavcanDummyPublisherGeneric
 	unsigned long _counter {0};
 	float _value = {0};
 	unsigned long _rate {100};
+	unsigned int _message_counter{0};
 
 	int messages_this_tick(const char* param_name) {
 		int result = -1;
@@ -106,14 +107,11 @@ public:
 	};
 
 	void gen_message() {
-		// Use the gryo data and the associated rotation message as the small one
-		sensor_gyro_s gyro {};
-		_gyro_sub.update(&gyro);
 
-		reg_drone_physics_kinematics_rotation_Planar_0_1 rs{};
-		rs.angular_acceleration.radian_per_second_per_second = gyro.x;
+		dummy_data_types_reg_small_1_0 rs{};
+		rs.counter = ++_message_counter;
 
-		uint8_t gyro_payload_buffer[reg_drone_physics_kinematics_rotation_Planar_0_1_SERIALIZATION_BUFFER_SIZE_BYTES_];
+		uint8_t payload_buffer[dummy_data_types_reg_small_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_];
 
 		CanardTransfer transfer = {
 			.timestamp_usec = hrt_absolute_time() + PUBLISHER_DEFAULT_TIMEOUT_USEC,
@@ -122,11 +120,11 @@ public:
 			.port_id        = _port_id, // This is the subject-ID.
 			.remote_node_id = CANARD_NODE_ID_UNSET,
 			.transfer_id    = _transfer_id,
-			.payload_size   = reg_drone_physics_kinematics_rotation_Planar_0_1_SERIALIZATION_BUFFER_SIZE_BYTES_,
-			.payload        = &gyro_payload_buffer,
+			.payload_size   = dummy_data_types_reg_small_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_,
+			.payload        = &payload_buffer,
 		};
 
-		int32_t result = reg_drone_physics_kinematics_rotation_Planar_0_1_serialize_(&rs, gyro_payload_buffer,
+		int32_t result = dummy_data_types_reg_small_1_0_serialize_(&rs, payload_buffer,
 					&transfer.payload_size);
 
 		if (result == 0) {
@@ -169,22 +167,23 @@ public:
 
 	void gen_message() {
 
-		reg_drone_service_battery_Parameters_0_3 rs{};
+		dummy_data_types_reg_vvlarge_1_0 rs{};
+		rs.counter = ++_message_counter;
 
-		uint8_t gyro_payload_buffer[reg_drone_service_battery_Parameters_0_3_SERIALIZATION_BUFFER_SIZE_BYTES_];
+		uint8_t payload_buffer[dummy_data_types_reg_vvlarge_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_];
 
 		CanardTransfer transfer = {
-			.timestamp_usec = hrt_absolute_time() + PUBLISHER_DEFAULT_TIMEOUT_USEC,
+			.timestamp_usec = hrt_absolute_time() + 10 * PUBLISHER_DEFAULT_TIMEOUT_USEC,
 			.priority       = CanardPriorityNominal,
 			.transfer_kind  = CanardTransferKindMessage,
 			.port_id        = _port_id, // This is the subject-ID.
 			.remote_node_id = CANARD_NODE_ID_UNSET,
 			.transfer_id    = _transfer_id,
-			.payload_size   = reg_drone_service_battery_Parameters_0_3_SERIALIZATION_BUFFER_SIZE_BYTES_,
-			.payload        = &gyro_payload_buffer,
+			.payload_size   = dummy_data_types_reg_vvlarge_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_,
+			.payload        = &payload_buffer,
 		};
 
-		int32_t result = reg_drone_service_battery_Parameters_0_3_serialize_(&rs, gyro_payload_buffer,
+		int32_t result = dummy_data_types_reg_vvlarge_1_0_serialize_(&rs, payload_buffer,
 					&transfer.payload_size);
 
 		if (result == 0) {
@@ -227,9 +226,10 @@ public:
 
 	void gen_message() {
 
-		reg_drone_physics_kinematics_geodetic_Point_0_1 rs{};
+		dummy_data_types_reg_medium_1_0 rs{};
+		rs.counter = ++_message_counter;
 
-		uint8_t gyro_payload_buffer[reg_drone_physics_kinematics_geodetic_Point_0_1_SERIALIZATION_BUFFER_SIZE_BYTES_];
+		uint8_t payload_buffer[dummy_data_types_reg_medium_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_];
 
 		CanardTransfer transfer = {
 			.timestamp_usec = hrt_absolute_time() + PUBLISHER_DEFAULT_TIMEOUT_USEC,
@@ -238,11 +238,11 @@ public:
 			.port_id        = _port_id, // This is the subject-ID.
 			.remote_node_id = CANARD_NODE_ID_UNSET,
 			.transfer_id    = _transfer_id,
-			.payload_size   = reg_drone_physics_kinematics_geodetic_Point_0_1_SERIALIZATION_BUFFER_SIZE_BYTES_,
-			.payload        = &gyro_payload_buffer,
+			.payload_size   = dummy_data_types_reg_medium_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_,
+			.payload        = &payload_buffer,
 		};
 
-		int32_t result = reg_drone_physics_kinematics_geodetic_Point_0_1_serialize_(&rs, gyro_payload_buffer,
+		int32_t result = dummy_data_types_reg_medium_1_0_serialize_(&rs, payload_buffer,
 					&transfer.payload_size);
 
 		if (result == 0) {

@@ -2,6 +2,7 @@ import os
 import serial
 import time
 import itertools
+import subprocess
 
 
 def write_to_serial(ser,msg):
@@ -57,11 +58,12 @@ class CAN_Test_Composite():
 
 
 class CAN_Test:
-	def __init__(self, name, settings, ser) -> None:
+	def __init__(self, name, settings, ser, sub) -> None:
 		self.name = name
 		self.settings = settings
 		self.ser = ser
 		self.test_index = 0
+		self.sub = sub
 		self.__expand_tests()
 		self.init = True
 
@@ -97,18 +99,21 @@ class CAN_Test:
 	def clean_slate(self, wait=0):
 		param_name = "uav_test_params"
 		if self.init:
-			write_to_serial(self.ser,'param set UCAN1_ESC_PUB 0')
-			write_to_serial(self.ser,'param set UCAN1_GPS_PUB 0')
-			write_to_serial(self.ser,'param set UCAN1_D_PUB_SM 0')
-			write_to_serial(self.ser,'param set UCAN1_D_PUB_MD 0')
-			write_to_serial(self.ser,'param set UCAN1_D_PUB_LG 0')
+			write_to_serial(self.ser ,'uavcan_v1 start')
+			time.sleep(3)
+			write_to_serial(self.ser,'param set UCAN1_ESC_PUB 65535')
+			write_to_serial(self.ser,'param set UCAN1_GPS_PUB 65535')
+			write_to_serial(self.ser,'param set UCAN1_D_PUB_SM 65535')
+			write_to_serial(self.ser,'param set UCAN1_D_PUB_MD 65535')
+			write_to_serial(self.ser,'param set UCAN1_D_PUB_LG 65535')
 			write_to_serial(self.ser,'param set UCAN1_DPUB_SM_HZ -1')
 			write_to_serial(self.ser,'param set UCAN1_DPUB_MD_HZ -1')
 			write_to_serial(self.ser,'param set UCAN1_DPUB_LG_HZ -1')
+			write_to_serial(self.ser ,'uavcan_v1 stop')
 			time.sleep(1)
-			write_to_serial(self.ser,'param save ')# + param_name)
+			write_to_serial(self.ser,'param save ')
 			time.sleep(1)
-			self.init = True
+			# self.init = True
 
 		write_to_serial(self.ser,'reboot')
 		time.sleep(wait)
@@ -119,12 +124,56 @@ class CAN_Test:
 		write_to_serial(self.ser ,'param set ' + setting.pub_param + " " + str(setting.pub_id))
 		write_to_serial(self.ser ,'param set ' + setting.freq_param + " " + str(setting.freq))
 
+	def monitor_px4(self,folder_name, wait_for, ignore=False):
+		total_msg = ""
+
+		target = time.time() + wait_for
+		while time.time() < target:
+			b = self.ser.read(1)
+			if len(b) < 1:
+				continue
+			try:
+				# print(str(b), b.decode("ASCII"))
+				total_msg += b.decode("ASCII")
+			except:
+				pass
+
+		if not ignore:
+			f = os.path.join(folder_name,'px4_console.log')
+			with open(f,'a') as ff:
+				ff.write(total_msg)
+
+
 	def run_all_tests(self):
 		for t in self.tt:
 			print("Running " + t.test_name)
 			self.clean_slate(wait=10)
+			folder_name = '/home/shaun/.cantst/'+t.test_name + '_' + str(t.pub_id) + '_' + str(t.freq)
+
+			os.system('rm -rf ' + folder_name)
+
+			os.system('mkdir -p ' + folder_name)
+
+			# Read any serial port data from the clean slate reboot (to clear it)
+			self.monitor_px4(folder_name,10,ignore=True)
+
+			sub_ = str(t.pub_id) + ":" + self.sub
+			cmd = 'stdbuf -oL yakut sub ' + sub_ + ' > ' + folder_name + '/yakut.log &'
+			print(cmd)
+			os.system(cmd)
+
+			# kick off the test
 			self.apply_test_settings(t)
-			time.sleep(30)
+			self.monitor_px4(folder_name,40)
+
+			# stop transmission and capture any final output
+			write_to_serial(self.ser ,'uavcan_v1 stop')
+			self.monitor_px4(folder_name,5)
+
+			# time.sleep(40)
+			cmd = 'pkill yakut'
+			os.system(cmd)
+
 
 
 	def __str__(self):
@@ -140,9 +189,9 @@ class CAN_Test:
 # Each entry follow this format: [Test_Name,[[TEST_1]..[TEST_N]]]
 test_grid = \
 	[
-		['TEST_1',[['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[1, 50, 100, 200, 400], 12]]],
-		# ['TEST_2',[['UCAN1_D_PUB_MD',23,'UCAN1_DPUB_MD_HZ',[1,100,200,400], 24]]],
-		# ['TEST_3',[['UCAN1_D_PUB_LG',24,'UCAN1_DPUB_LG_HZ',[1,100,200,400], 58]]],
+		(['TEST_1',[['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[10,50,100,200,400,600], 1]]],"dummy_data_types.reg.small.1.0"),
+		(['TEST_2',[['UCAN1_D_PUB_MD',23,'UCAN1_DPUB_MD_HZ',[1,50,100,200,400,600], 8]]],"dummy_data_types.reg.medium.1.0"),
+		(['TEST_3',[['UCAN1_D_PUB_LG',24,'UCAN1_DPUB_LG_HZ',[0.1,1,2,3,4,5,6,7,8,9,10,11,12], 512]]],"dummy_data_types.reg.vvlarge.1.0"),
 		# ['COMPOSITE_TEST_1',[
 		# 	['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[400], 12],
 		# 	['UCAN1_D_PUB_MD',23,'UCAN1_DPUB_MD_HZ',[200], 24],
@@ -153,43 +202,24 @@ test_grid = \
 
 
 
-def test_procedure(ser,setting):
-	write_to_serial(ser,'reboot')
-	time.sleep(5)
-	write_to_serial(ser,'uavcan_v1 start')
-	write_to_serial(ser,'param set ' + setting[0] + " " + str(setting[1]))
-	write_to_serial(ser,'param set ' + setting[2] + " " + str(setting[3]))
-
-
-
-SERIALPORT = "/dev/ttyACM3"
+SERIALPORT = "/dev/ttyACM5"
 BAUDRATE = 57600
 
-ser = serial.Serial(SERIALPORT, BAUDRATE)  # open serial port
+ser = serial.Serial(SERIALPORT, BAUDRATE, timeout=1)  # open serial port
 ser.close()
 ser.open()
 print(ser.name)         # check which port was really used
 
-for test in test_grid:
-
+for test_entry in test_grid:
+	test,sub = test_entry
 	name = test[0]
 	tests = test[1]
-	tt = CAN_Test(name,tests,ser)
+	tt = CAN_Test(name,tests,ser,sub)
 	tt.run_all_tests()
+	break
+
 
 ser.close()
 
-exit()
 
 
-
-for k,v in test_grid.items():
-	print(k)
-	print(v)
-	test_procedure(ser,v)
-	break
-ser.close()             # close port
-
-
-# cmd = 'yakut monitor > test.log &'
-# os.system(cmd)
