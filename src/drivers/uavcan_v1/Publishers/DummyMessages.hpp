@@ -147,12 +147,7 @@ public:
 			gen_message();
 		}
 
-	};
-
-private:
-
-	uORB::Subscription _gyro_sub{ORB_ID(sensor_gyro)};
-	CanardTransferID _transfer_id_2 {0};
+	}
 };
 
 
@@ -206,11 +201,7 @@ public:
 			gen_message();
 		}
 
-	};
-
-private:
-
-	CanardTransferID _transfer_id_2 {0};
+	}
 };
 
 
@@ -267,7 +258,4 @@ public:
 
 	};
 
-private:
-
-	CanardTransferID _transfer_id_2 {0};
 };

@@ -53,7 +53,9 @@ def process_px4_console_log(folder_loc):
 	console_log = file.read()
 	file.close()
 
-	print(console_log.index("NuttShell (NSH)"))
+	counted_messages_sent = console_log.count('(')
+	counted_messages_discarded = console_log.count('#')
+	print(counted_messages_sent,counted_messages_discarded)
 
 def get_all_tests(folder):
 	return [name for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))]
@@ -92,7 +94,6 @@ def main():
 			avg_time_between_messages = res[3]
 			print(dropped, max_time_between_messages, avg_time_between_messages, 1/avg_time_between_messages)
 
-		return
 	# print(full_results_set)
 
 

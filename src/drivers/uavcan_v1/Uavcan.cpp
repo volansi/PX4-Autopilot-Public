@@ -332,7 +332,7 @@ void UavcanNode::transmit()
 			#endif
 			drop_frame = true;
 		}
-
+		fflush(stdout);
 		if (drop_frame) {
 			// Drop the frame
 			canardTxPop(&_canard_instance);
