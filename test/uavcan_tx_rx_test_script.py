@@ -104,87 +104,67 @@ def open_serial_port(port):
 	print(ser.name)         # check which port was really used
 	return ser
 
-pixhawk_ser = open_serial_port(args.phawk_ser[0])
-pixracer_ser = open_serial_port(args.pracer_ser[0])
 
-folder_name = '/home/shaun/.cantst/PUB_SUB_Test_1'
-os.system('rm -rf ' + folder_name)
-os.system('mkdir -p ' + folder_name)
+test_set = [
+			['PUB_SUB_Test_1',400,-1,-1],
+			['PUB_SUB_Test_2',-1,400,-1],
+			['PUB_SUB_Test_3',-1,300,-1],
+			['PUB_SUB_Test_4',100,100,-1],
+			['PUB_SUB_Test_5',200,200,-1],
+			['PUB_SUB_Test_6',300,200,-1]
+			]
 
-write_to_serial(pixhawk_ser,'uavcan_v1 start')
-write_to_serial(pixhawk_ser,'param set UCAN1_D_PUB_SM 22')
-write_to_serial(pixhawk_ser,'param set UCAN1_D_PUB_MD 23')
-write_to_serial(pixhawk_ser,'param set UCAN1_D_PUB_LG 24')
-write_to_serial(pixhawk_ser,'param set UCAN1_DPUB_SM_HZ 600')
-write_to_serial(pixhawk_ser,'param set UCAN1_DPUB_MD_HZ -1')
-write_to_serial(pixhawk_ser,'param set UCAN1_DPUB_LG_HZ -1')
-write_to_serial(pixhawk_ser,'param save')
-write_to_serial(pixhawk_ser,'reboot')
+for test_item in test_set:
+	print("TEST:" + test_item[0])
+	pixhawk_ser = open_serial_port(args.phawk_ser[0])
+	pixracer_ser = open_serial_port(args.pracer_ser[0])
 
-write_to_serial(pixracer_ser,'param set UCAN1_DMY1_PID 22')
-write_to_serial(pixracer_ser,'param set UCAN1_DMY2_PID 23')
-write_to_serial(pixracer_ser,'param set UCAN1_DMY3_PID 24')
-write_to_serial(pixracer_ser,'param save')
-write_to_serial(pixracer_ser,'reboot')
+	folder_name = '/home/shaun/.cantst/' + test_item[0]
+	os.system('rm -rf ' + folder_name)
+	os.system('mkdir -p ' + folder_name)
 
-# Clear the pxracer for N seconds while the pixhawk reboots
-monitor_px4(pixracer_ser,pixhawk_ser,folder_name,30,ignore=True)
+	write_to_serial(pixhawk_ser,'uavcan_v1 start')
+	write_to_serial(pixhawk_ser,'param set UCAN1_D_PUB_SM 22')
+	write_to_serial(pixhawk_ser,'param set UCAN1_D_PUB_MD 23')
+	write_to_serial(pixhawk_ser,'param set UCAN1_D_PUB_LG 24')
+	write_to_serial(pixhawk_ser,'param set UCAN1_DPUB_SM_HZ '+str(test_item[1]))
+	write_to_serial(pixhawk_ser,'param set UCAN1_DPUB_MD_HZ '+str(test_item[2]))
+	write_to_serial(pixhawk_ser,'param set UCAN1_DPUB_LG_HZ '+str(test_item[3]))
+	write_to_serial(pixhawk_ser,'param save')
+	write_to_serial(pixhawk_ser,'reboot')
 
-# kick off the publishing
-write_to_serial(pixhawk_ser,'uavcan_v1 start')
+	write_to_serial(pixracer_ser,'param set UCAN1_DMY1_PID 22')
+	write_to_serial(pixracer_ser,'param set UCAN1_DMY2_PID 23')
+	write_to_serial(pixracer_ser,'param set UCAN1_DMY3_PID 24')
+	write_to_serial(pixracer_ser,'param save')
+	write_to_serial(pixracer_ser,'reboot')
 
-pxracer_log, pxhawk_log = monitor_px4(pixracer_ser,pixhawk_ser,folder_name,40)
+	# Clear the pxracer for N seconds while the pixhawk reboots
+	monitor_px4(pixracer_ser,pixhawk_ser,folder_name,30,ignore=True)
 
-pixhawk_ser.close()
-pixracer_ser.close()
+	# kick off the publishing
+	write_to_serial(pixhawk_ser,'uavcan_v1 start')
 
-c = pxracer_log.split()
-small,medium,large = split_log_element(c)
+	pxracer_log, pxhawk_log = monitor_px4(pixracer_ser,pixhawk_ser,folder_name,40)
 
+	pixhawk_ser.close()
+	pixracer_ser.close()
 
-print()
-print("SMALL:")
-process_results(small)
-
-
-print()
-print("MEDIUM:")
-process_results(medium)
-
-
-print()
-print("LARGE:")
-process_results(large)
+	c = pxracer_log.split()
+	small,medium,large = split_log_element(c)
 
 
+	print()
+	print("SMALL:")
+	process_results(small)
 
-# small = [x[1:] for x in c if x[0] == 'S']
-# check_list = [x for x in c if x[0] == '(']
-# ss =  [x[2:] for x in check_list if x[1] == 'S']
-# small.extend(ss)
-# medium = [x[1:] for x in c if x[0] == 'M']
-# mm =  [x[2:] for x in check_list if x[1] == 'M']
-# medium.extend(mm)
-# large = [x[1:] for x in c if x[0] == 'L']
-# ll =  [x[2:] for x in check_list if x[1] == 'L']
-# large.extend(ll)
-# ismall = []
-# for s in small:
-# 	try:
-# 		ss = int(s)
-# 		ismall.append(ss)
-# 	except ValueError:
-# 		print(s + " not an int")
 
-# iismall = np.asarray(ismall)
-# iismall = np.sort(iismall)
-# print(iismall)
+	print()
+	print("MEDIUM:")
+	process_results(medium)
 
-# d = iismall[1:] - iismall[:-1]
-# print("Indices where packets were dropped:")
-# print(iismall[np.where(d>1)])
-# print("Sum of dropped packets: " + str(np.sum(iismall[np.where(d>1)])))
-# print("TX Dropped packets: " + str(pxhawk_log.count("#")))
-# print([np.max(d),np.mean(d),np.std(d),np.var(d)])
 
+	print()
+	print("LARGE:")
+	process_results(large)
 

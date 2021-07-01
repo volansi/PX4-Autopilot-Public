@@ -74,8 +74,8 @@ public:
 		dummy_data_types_reg_medium_1_0 geo {};
 		size_t geo_size_in_bits = receive.payload_size;
 		dummy_data_types_reg_medium_1_0_deserialize_(&geo, (const uint8_t *)receive.payload, &geo_size_in_bits);
-		printf("M%d ",geo.counter);
-		fflush(stdout);
+		// printf("M%d ",geo.counter);
+		// fflush(stdout);
 
 		// Every N messages print out current state, will match if
 		// there are no dropped messages, otherwise it won't
@@ -112,12 +112,12 @@ public:
 		size_t geo_size_in_bits = receive.payload_size;
 		dummy_data_types_reg_vvlarge_1_0_deserialize_(&geo, (const uint8_t *)receive.payload, &geo_size_in_bits);
 
-		printf("L%d ",geo.counter);
-		fflush(stdout);
+		// printf("L%d ",geo.counter);
+		// fflush(stdout);
 
-		// Every N messages print out current state, will match if
+		// Every 10 messages print out current state, will match if
 		// there are no dropped messages, otherwise it won't
-		if(_messages_received++ %_N_ == 0){
+		if(_messages_received++ %10 == 0){
 			printf("{L%ld:%ld ",geo.counter,_messages_received);
 			fflush(stdout);
 		}
