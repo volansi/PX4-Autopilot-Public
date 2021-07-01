@@ -54,17 +54,21 @@ def process_results(results):
 		print('No Data')
 		return
 
-	ss = results[-1]
-	if len(ss) < 2:
-		print("unexpected values")
-		print(results)
-		print(ss)
-		return
-	small_elements_missing = ss[0] - ss[1]
-	print('Total number of messages received ' + str(ss[1]))
-	print('Total number of messages sent ' + str(ss[0]))
-	print('Delta ' + str(small_elements_missing))
-	print("TX Dropped packets (all messages): " + str(pxhawk_log.count("#")))
+	# find the last full entry and use that
+	index = -1
+	while True:
+		if index < -len(results):
+			return
+		ss = results[index]
+		if len(ss) < 2:
+			print("unexpected values, rolling back")
+			print(ss)
+			index -= 1
+			continue
+		small_elements_missing = ss[0] - ss[1]
+		print('Missing ' + str(small_elements_missing) + ' : ' + str(ss[1]) + ' / ' + str(ss[0]))
+		print("TX Dropped packets (all messages): " + str(pxhawk_log.count("#")))
+		break
 
 def write_to_serial(ser,msg):
 	print(msg)
@@ -125,6 +129,7 @@ test_set = [
 			['PUB_SUB_Test_12',200,50,10],
 			['PUB_SUB_Test_13',150,25,5],
 			['PUB_SUB_Test_14',100,25,1],
+			['PUB_SUB_Test_15',300,200,30],
 			]
 
 for test_item in test_set:
@@ -153,7 +158,7 @@ for test_item in test_set:
 	write_to_serial(pixracer_ser,'reboot')
 
 	# Clear the pxracer for N seconds while the pixhawk reboots
-	monitor_px4(pixracer_ser,pixhawk_ser,folder_name,30,ignore=True)
+	monitor_px4(pixracer_ser,pixhawk_ser,folder_name,25,ignore=True)
 
 	# kick off the publishing
 	write_to_serial(pixhawk_ser,'uavcan_v1 start')
