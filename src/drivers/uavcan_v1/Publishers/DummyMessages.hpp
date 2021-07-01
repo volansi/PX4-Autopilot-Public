@@ -223,7 +223,7 @@ public:
 		uint8_t payload_buffer[dummy_data_types_reg_medium_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_];
 
 		CanardTransfer transfer = {
-			.timestamp_usec = hrt_absolute_time() + PUBLISHER_DEFAULT_TIMEOUT_USEC,
+			.timestamp_usec = hrt_absolute_time() + 3 * PUBLISHER_DEFAULT_TIMEOUT_USEC,
 			.priority       = CanardPriorityNominal,
 			.transfer_kind  = CanardTransferKindMessage,
 			.port_id        = _port_id, // This is the subject-ID.

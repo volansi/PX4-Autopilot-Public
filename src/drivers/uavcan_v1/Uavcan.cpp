@@ -321,7 +321,7 @@ void UavcanNode::transmit()
 				#endif
 
 				// Can't send for some reason, bail
-				if(bail_counter++ > 50)
+				if(bail_counter++ > 75)
 					break;
 			}
 		} else if (is_timed_out) {
