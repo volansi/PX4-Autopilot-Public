@@ -113,14 +113,17 @@ public:
 private:
 
 
-	const UavcanParamBinder _uavcan_params[15] {
-		{"uavcan.pub.esc.0.id",                "UCAN1_ESC_PUB",		        px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
+	const UavcanParamBinder _uavcan_params[18] {
+		{"uavcan.pub.esc.0.id",                "UCAN1_ESC_PUB",		    px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.pub.servo.0.id",              "UCAN1_SERVO_PUB",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
-		{"uavcan.pub.gps.0.id",                "UCAN1_GPS_PUB",		        px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
+		{"uavcan.pub.gps.0.id",                "UCAN1_GPS_PUB",		    px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.pub.gyro.0.id",    	       "UCAN1_GYRO_PUB",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.pub.dummy.sml.0.id",          "UCAN1_D_PUB_SM",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.pub.dummy.med.0.id",          "UCAN1_D_PUB_MD",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.pub.dummy.lrg.0.id",          "UCAN1_D_PUB_LG",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
+		{"uavcan.sub.dummy.sml.0.id",          "UCAN1_DMY1_PID",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
+		{"uavcan.sub.dummy.med.0.id",          "UCAN1_DMY2_PID",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
+		{"uavcan.sub.dummy.lrg.0.id",          "UCAN1_DMY3_PID",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.sub.esc.0.id",                "UCAN1_ESC0_PID",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.sub.gps.0.id",                "UCAN1_GPS0_PID",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},
 		{"uavcan.sub.gps.1.id",                "UCAN1_GPS1_PID",		px4_param_to_uavcan_port_id, uavcan_port_id_to_px4_param},

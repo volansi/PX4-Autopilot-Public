@@ -194,6 +194,7 @@ test_grid = \
 		(['TEST_1',[['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[10,50,100,200,400,600], 1]]],"dummy_data_types.reg.small.1.0"),
 		(['TEST_2',[['UCAN1_D_PUB_MD',23,'UCAN1_DPUB_MD_HZ',[1,50,100,200,400,600], 8]]],"dummy_data_types.reg.medium.1.0"),
 		(['TEST_3',[['UCAN1_D_PUB_LG',24,'UCAN1_DPUB_LG_HZ',[0.1,1,2,3,4,5,6,7,8,9,10,11,12,15,20], 512]]],"dummy_data_types.reg.vvlarge.1.0"),
+		# TODO: implement the composite test system and use yakut monitor instead of sub
 		# ['COMPOSITE_TEST_1',[
 		# 	['UCAN1_D_PUB_SM',22,'UCAN1_DPUB_SM_HZ',[400], 12],
 		# 	['UCAN1_D_PUB_MD',23,'UCAN1_DPUB_MD_HZ',[200], 24],

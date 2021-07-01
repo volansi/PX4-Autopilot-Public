@@ -59,28 +59,50 @@ void SubscriptionManager::subscribe()
 	_heartbeat_sub.subscribe();
 	_getinfo_rsp.subscribe();
 	_access_rsp.subscribe();
+	updateDynamicSubscriptions();
+}
 
+void SubscriptionManager::updateDynamicSubscriptions()
+{
 	for (auto &sub : _uavcan_subs) {
-		param_t param_handle = param_find(sub.px4_name);
+		if (sub.instance == NULL) {
+			param_t param_handle = param_find(sub.px4_name);
 
-		if (param_handle == PARAM_INVALID) {
-			PX4_ERR("Param %s not found", sub.px4_name);
-			break;
-		}
+			if (param_handle == PARAM_INVALID) {
+				PX4_ERR("Param %s not found", sub.px4_name);
+				break;
+			}
 
-		if ((param_type(param_handle) == PARAM_TYPE_INT32)) {
-			int32_t port_id {};
-			param_get(param_handle, &port_id);
+			if ((param_type(param_handle) == PARAM_TYPE_INT32)) {
+				int32_t port_id {};
+				param_get(param_handle, &port_id);
 
-			if (port_id >= 0) { // PortID is set create a subscriber
-				UavcanDynamicPortSubscriber *dynsub = sub.create_sub(_canard_instance, _param_manager);
+				if (port_id >= 0) { // PortID is set create a subscriber
+					UavcanDynamicPortSubscriber *dynsub = sub.create_sub(_canard_instance, _param_manager);
 
-				if (_dynsubscribers != NULL) {
-					_dynsubscribers->setNext(dynsub);
+					if (dynsub == NULL) {
+						PX4_ERR("Out of memory");
+						return;
+					}
+
+					if (_dynsubscribers == NULL) {
+						// Set the head of our linked list
+						_dynsubscribers = dynsub;
+
+					} else {
+						// Append the new subscriber to our linked list
+						UavcanDynamicPortSubscriber *tmp = _dynsubscribers;
+
+						while (tmp->next() != NULL) {
+							tmp = tmp->next();
+						}
+
+						tmp->setNext(dynsub);
+					}
+
+					sub.instance = dynsub;
+					dynsub->updateParam();
 				}
-
-				_dynsubscribers = dynsub;
-				dynsub->updateParam();
 			}
 		}
 	}
@@ -88,10 +110,23 @@ void SubscriptionManager::subscribe()
 
 void SubscriptionManager::printInfo()
 {
+	UavcanDynamicPortSubscriber *dynsub = _dynsubscribers;
 
+	while (dynsub != NULL) {
+		dynsub->printInfo();
+		dynsub = dynsub->next();
+	}
 }
 
 void SubscriptionManager::updateParams()
 {
-	//TODO dynamically update params and unsubscribe
+	UavcanDynamicPortSubscriber *dynsub = _dynsubscribers;
+
+	while (dynsub != NULL) {
+		dynsub->updateParam();
+		dynsub = dynsub->next();
+	}
+
+	// Check for any newly-enabled subscriptions
+	updateDynamicSubscriptions();
 }

@@ -46,6 +46,7 @@
 #include <drivers/drv_hrt.h>
 #include "Subscribers/DynamicPortSubscriber.hpp"
 #include "CanardInterface.hpp"
+#include "Subscribers/DummyMessages.hpp"
 
 #include "ServiceClients/GetInfo.hpp"
 #include "ServiceClients/Access.hpp"
@@ -60,6 +61,7 @@
 typedef struct {
 	const char *px4_name;
 	UavcanDynamicPortSubscriber *(*create_sub)(CanardInstance &ins, UavcanParamManager &pmgr) {};
+	UavcanDynamicPortSubscriber *instance {nullptr};
 } UavcanDynSubBinder;
 
 class SubscriptionManager
@@ -73,6 +75,7 @@ public:
 	void updateParams();
 
 private:
+	void updateDynamicSubscriptions();
 	CanardInstance &_canard_instance;
 	UavcanParamManager &_param_manager;
 	UavcanDynamicPortSubscriber *_dynsubscribers {NULL};
@@ -84,7 +87,28 @@ private:
 	// Process register requests
 	UavcanAccessResponse  _access_rsp {_canard_instance, _param_manager};
 
-	const UavcanDynSubBinder _uavcan_subs[6] {
+	UavcanDynSubBinder _uavcan_subs[9] {
+		{
+			"UCAN1_DMY1_PID",
+			[](CanardInstance & ins, UavcanParamManager & pmgr) -> UavcanDynamicPortSubscriber *
+			{
+				return new UavcanDummySmlSubscriber(ins, pmgr, 0);
+			}
+		},
+		{
+			"UCAN1_DMY2_PID",
+			[](CanardInstance & ins, UavcanParamManager & pmgr) -> UavcanDynamicPortSubscriber *
+			{
+				return new UavcanDummyMedSubscriber(ins, pmgr, 0);
+			}
+		},
+		{
+			"UCAN1_DMY3_PID",
+			[](CanardInstance & ins, UavcanParamManager & pmgr) -> UavcanDynamicPortSubscriber *
+			{
+				return new UavcanDummyLrgSubscriber(ins, pmgr, 0);
+			}
+		},
 		{
 			"UCAN1_ESC0_PID",
 			[](CanardInstance & ins, UavcanParamManager & pmgr) -> UavcanDynamicPortSubscriber *
