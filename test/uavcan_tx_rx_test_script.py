@@ -55,6 +55,11 @@ def process_results(results):
 		return
 
 	ss = results[-1]
+	if len(ss) < 2:
+		print("unexpected values")
+		print(results)
+		print(ss)
+		return
 	small_elements_missing = ss[0] - ss[1]
 	print('Total number of messages received ' + str(ss[1]))
 	print('Total number of messages sent ' + str(ss[0]))
@@ -72,14 +77,14 @@ def monitor_px4(ser_1,ser_2,folder_name, wait_for, ignore=False):
 
 	target = time.time() + wait_for
 	while time.time() < target:
-		b = ser_1.read(1)
+		b = ser_1.read(1024)
 		if len(b) < 1:
 			continue
 		try:
 			total_msg_1 += b.decode("ASCII")
 		except:
 			pass
-		b = ser_2.read(1)
+		b = ser_2.read(1024)
 		if len(b) < 1:
 			continue
 		try:
@@ -111,7 +116,15 @@ test_set = [
 			['PUB_SUB_Test_3',-1,300,-1],
 			['PUB_SUB_Test_4',100,100,-1],
 			['PUB_SUB_Test_5',200,200,-1],
-			['PUB_SUB_Test_6',300,200,-1]
+			['PUB_SUB_Test_6',300,200,-1],
+			['PUB_SUB_Test_7',-1,-1,10],
+			['PUB_SUB_Test_8',-1,-1,50],
+			['PUB_SUB_Test_9',-1,-1,100],
+			['PUB_SUB_Test_10',300,100,20],
+			['PUB_SUB_Test_11',300,50,50],
+			['PUB_SUB_Test_12',200,50,10],
+			['PUB_SUB_Test_13',150,25,5],
+			['PUB_SUB_Test_14',100,25,1],
 			]
 
 for test_item in test_set:

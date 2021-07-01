@@ -108,9 +108,9 @@ public:
 	void callback(const CanardTransfer &receive) override
 	{
 
-		dummy_data_types_reg_vvlarge_1_0 geo {};
+		dummy_data_types_reg_large_1_0 geo {};
 		size_t geo_size_in_bits = receive.payload_size;
-		dummy_data_types_reg_vvlarge_1_0_deserialize_(&geo, (const uint8_t *)receive.payload, &geo_size_in_bits);
+		dummy_data_types_reg_large_1_0_deserialize_(&geo, (const uint8_t *)receive.payload, &geo_size_in_bits);
 
 		// printf("L%d ",geo.counter);
 		// fflush(stdout);

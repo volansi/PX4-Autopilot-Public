@@ -162,10 +162,10 @@ public:
 
 	void gen_message() {
 
-		dummy_data_types_reg_vvlarge_1_0 rs{};
+		dummy_data_types_reg_large_1_0 rs{};
 		rs.counter = ++_message_counter;
 
-		uint8_t payload_buffer[dummy_data_types_reg_vvlarge_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_];
+		uint8_t payload_buffer[dummy_data_types_reg_large_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_];
 
 		CanardTransfer transfer = {
 			.timestamp_usec = hrt_absolute_time() + 10 * PUBLISHER_DEFAULT_TIMEOUT_USEC,
@@ -174,11 +174,11 @@ public:
 			.port_id        = _port_id, // This is the subject-ID.
 			.remote_node_id = CANARD_NODE_ID_UNSET,
 			.transfer_id    = _transfer_id,
-			.payload_size   = dummy_data_types_reg_vvlarge_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_,
+			.payload_size   = dummy_data_types_reg_large_1_0_SERIALIZATION_BUFFER_SIZE_BYTES_,
 			.payload        = &payload_buffer,
 		};
 
-		int32_t result = dummy_data_types_reg_vvlarge_1_0_serialize_(&rs, payload_buffer,
+		int32_t result = dummy_data_types_reg_large_1_0_serialize_(&rs, payload_buffer,
 					&transfer.payload_size);
 
 		if (result == 0) {
