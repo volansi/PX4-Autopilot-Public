@@ -53,7 +53,7 @@
 
 using namespace time_literals;
 
-#define SBUS_DEBUG_LEVEL 	0 /* Set debug output level */
+#define SBUS_DEBUG_LEVEL 	3 /* Set debug output level */
 
 #if defined(__PX4_LINUX)
 #include <sys/ioctl.h>
@@ -280,6 +280,8 @@ sbus_input(int sbus_fd, uint16_t *values, uint16_t *num_values, bool *sbus_fails
 		return false;
 	}
 
+	syslog(LOG_INFO, "Got %d bytes\n", ret);
+
 	const hrt_abstime now = hrt_absolute_time();
 #ifdef __PX4_NUTTX /* limit time-based hardening to RTOS's where we have reliable timing */
 
@@ -298,12 +300,12 @@ sbus_input(int sbus_fd, uint16_t *values, uint16_t *num_values, bool *sbus_fails
 	 * provides a degree of protection. Of course, it would be better
 	 * if we didn't drop bytes...
 	 */
-	if (now - last_rx_time > 3_ms) {
+	if (now - last_rx_time > 100_ms) { // increased timeout due to the syslog statements
 		if (partial_frame_count > 0) {
 			partial_frame_count = 0;
 			sbus_decode_state = SBUS2_DECODE_STATE_DESYNC;
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-			printf("SBUS: RESET (TIME LIM)\n");
+			syslog(LOG_INFO, "SBUS: RESET (TIME LIM)\n");
 #endif
 		}
 	}
@@ -344,7 +346,7 @@ sbus_parse(uint64_t now, uint8_t *frame, unsigned len, uint16_t *values,
 			partial_frame_count = 0;
 			sbus_decode_state = SBUS2_DECODE_STATE_DESYNC;
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-			printf("SBUS2: RESET (BUF LIM)\n");
+			syslog(LOG_INFO, "SBUS2: RESET (BUF LIM)\n");
 #endif
 		}
 
@@ -352,12 +354,12 @@ sbus_parse(uint64_t now, uint8_t *frame, unsigned len, uint16_t *values,
 			partial_frame_count = 0;
 			sbus_decode_state = SBUS2_DECODE_STATE_DESYNC;
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-			printf("SBUS2: RESET (PACKET LIM)\n");
+			syslog(LOG_INFO, "SBUS2: RESET (PACKET LIM)\n");
 #endif
 		}
 
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 1
-		printf("sbus state: %s%s%s%s%s%s, count: %d, val: %02x\n",
+		syslog(LOG_INFO, "sbus state: %s%s%s%s%s%s, count: %d, val: %02x\n",
 		       (sbus_decode_state == SBUS2_DECODE_STATE_DESYNC) ? "SBUS2_DECODE_STATE_DESYNC" : "",
 		       (sbus_decode_state == SBUS2_DECODE_STATE_SBUS_START) ? "SBUS2_DECODE_STATE_SBUS_START" : "",
 		       (sbus_decode_state == SBUS2_DECODE_STATE_SBUS1_SYNC) ? "SBUS2_DECODE_STATE_SBUS1_SYNC" : "",
@@ -424,7 +426,7 @@ sbus_parse(uint64_t now, uint8_t *frame, unsigned len, uint16_t *values,
 						sbus_decode_state = SBUS2_DECODE_STATE_SBUS_START;
 
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-						printf("DECODE RECOVERY: %d\n", start_index);
+						syslog(LOG_INFO, "DECODE RECOVERY: %d\n", start_index);
 #endif
 					}
 				}
@@ -462,7 +464,7 @@ sbus_parse(uint64_t now, uint8_t *frame, unsigned len, uint16_t *values,
 						// (frame[0] == 0x3 && frame[1] == 0xc0 && frame[2] == 0x2f)
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 2
 						uint16_t rx_voltage = (sbus_frame[1] << 8) | sbus_frame[2];
-						printf("rx_voltage %d\n", (int)rx_voltage);
+						syslog(LOG_INFO, "rx_voltage %d\n", (int)rx_voltage);
 #endif
 					}
 
@@ -495,7 +497,7 @@ sbus_parse(uint64_t now, uint8_t *frame, unsigned len, uint16_t *values,
 				case 0x13: {
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
 						uint16_t gps_something = (frame[1] << 8) | frame[2];
-						printf("gps_something %d\n", (int)gps_something);
+						syslog(LOG_INFO, "gps_something %d\n", (int)gps_something);
 #endif
 					}
 
@@ -513,7 +515,7 @@ sbus_parse(uint64_t now, uint8_t *frame, unsigned len, uint16_t *values,
 
 		default:
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-			printf("UNKNOWN PROTO STATE");
+			syslog(LOG_INFO, "UNKNOWN PROTO STATE");
 #endif
 			decode_ret = false;
 		}
@@ -574,13 +576,13 @@ sbus_decode(uint64_t frame_time, uint8_t *frame, uint16_t *values, uint16_t *num
 	if (frame[0] != SBUS_START_SYMBOL) {
 		sbus_frame_drops++;
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-		printf("DECODE FAIL: ");
+		syslog(LOG_INFO, "DECODE FAIL: ");
 
 		for (unsigned i = 0; i < SBUS_FRAME_SIZE; i++) {
-			printf("%0x ", frame[i]);
+			syslog(LOG_INFO, "%0x ", frame[i]);
 		}
 
-		printf("\n");
+		syslog(LOG_INFO, "\n");
 #endif
 		sbus_decode_state = SBUS2_DECODE_STATE_DESYNC;
 		return false;
@@ -615,7 +617,7 @@ sbus_decode(uint64_t frame_time, uint8_t *frame, uint16_t *values, uint16_t *num
 
 	default:
 #if defined(SBUS_DEBUG_LEVEL) && SBUS_DEBUG_LEVEL > 0
-		printf("DECODE FAIL: END MARKER\n");
+		syslog(LOG_INFO, "DECODE FAIL: END MARKER\n");
 #endif
 		sbus_decode_state = SBUS2_DECODE_STATE_DESYNC;
 		return false;

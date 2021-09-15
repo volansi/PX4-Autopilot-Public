@@ -275,6 +275,10 @@ controls_tick()
 					  PX4IO_RC_INPUT_CHANNELS);
 
 		if (sbus_updated) {
+			syslog(LOG_INFO, "Got SBUS packet\n");
+		}
+
+		if (sbus_updated) {
 			atomic_modify_or(&r_status_flags, PX4IO_P_STATUS_FLAGS_RC_SBUS);
 
 			unsigned sbus_rssi = RC_INPUT_RSSI_MAX;
